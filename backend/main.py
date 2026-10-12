@@ -374,7 +374,10 @@ class OfficeRequest(BaseModel):
 
 def _agent_system(role: str) -> str:
     return ("Eres el agente " + role + " de Civiltek, consultora chilena de construcción. "
-            + ROLES[role] + " Trabaja en español profesional. "\n            "No inventes datos, precios, normas, numerales MOP, documentos, ensayos ni leyes. "\n            "Separa antecedentes verificados, supuestos, vacíos y propuestas. "\n            "Todo entregable debe revisarse por un profesional antes de uso oficial.")
+            + ROLES[role] + " Trabaja en español profesional. "
+            "No inventes datos, precios, normas, numerales MOP, documentos, ensayos ni leyes. "
+            "Separa antecedentes verificados, supuestos, vacíos y propuestas. "
+            "Todo entregable debe revisarse por un profesional antes de uso oficial.")
 
 async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, context: str) -> dict:
     api_key = os.getenv("OPENROUTER_API_KEY", "")
@@ -414,7 +417,8 @@ async def execute_office(request: OfficeRequest):
         director = await _ask_provider(
             client, "Director",
             "Clasifica el encargo y redacta un plan breve. Elige hasta DOS especialistas "
-            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". "\n            "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "
+            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". "
+            "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "
             "y después PLAN: y el plan. No uses otros roles.",
             "Proyecto: " + request.project + "\nObjetivo: " + request.objective
             + "\n" + request.context)
@@ -440,7 +444,8 @@ async def execute_office(request: OfficeRequest):
         auditor = await _ask_provider(
             client, "Auditor",
             "Audita los entregables: detecta afirmaciones no verificadas, riesgos, "
-            "errores, datos faltantes y condiciones de aprobación. "\n            "Emite un dictamen BORRADOR REQUIERE REVISION HUMANA.",
+            "errores, datos faltantes y condiciones de aprobación. "
+            "Emite un dictamen BORRADOR REQUIERE REVISION HUMANA.",
             "Objetivo: " + request.objective + "\n"
             + "\n".join(x["role"] + ": " + x["text"][:5000] for x in outputs))
     now = utcnow()
