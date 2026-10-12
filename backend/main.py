@@ -474,11 +474,11 @@ async def ejecutar_estudio_licitacion(ident: str):
     docs = tender.get("documents", [])
     if not docs:
         raise HTTPException(422, "Primero incorpora las bases y anexos del expediente.")
-    context = "LICITACIÓN: " + tender["name"] + "\\nMANDANTE: " + tender.get("client", "")
-    context += "\\nDOCUMENTOS Y TEXTO EXTRAÍDO:\\n"
+    context = "LICITACIÓN: " + tender["name"] + "\nMANDANTE: " + tender.get("client", "")
+    context += "\nDOCUMENTOS Y TEXTO EXTRAÍDO:\n"
     for doc in docs[:15]:
-        context += "\\n### FUENTE: " + doc["filename"] + " (id " + doc["id"] + ")\\n"
-        context += doc["text"][:12000] + "\\n"
+        context += "\n### FUENTE: " + doc["filename"] + " (id " + doc["id"] + ")\n"
+        context += doc["text"][:12000] + "\n"
         if len(context) > 55000:
             break
     objective = ("Estudiar las bases de esta licitación y elaborar un expediente preliminar. "
