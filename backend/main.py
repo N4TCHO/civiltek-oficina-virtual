@@ -386,35 +386,52 @@ def _agent_system(role: str) -> str:
             "Todo entregable debe revisarse por un profesional antes de uso oficial.")
 
 async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, context: str) -> dict:
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
-    if not api_key:
-        raise HTTPException(503, "Configura OPENROUTER_API_KEY en Railway.")
-    model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+    """Use Claude for coordination/review when configured; OpenRouter for specialists.
+    Fail over to the other configured provider, without claiming unavailable integrations.
+    """
     messages = [{"role": "system", "content": _agent_system(role)},
                 {"role": "user", "content": instruction + "\n\nANTECEDENTES:\n" + context}]
-    payload = {"model": model, "messages": messages, "max_tokens": 1250, "temperature": 0.2}
-    headers = {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}
-    for attempt in range(2):
-        try:
-            response = await client.post("https://openrouter.ai/api/v1/chat/completions",
-                                         json=payload, headers=headers)
-        except httpx.HTTPError as exc:
-            raise HTTPException(502, "No fue posible contactar OpenRouter.") from exc
-        if response.status_code == 402 and model != "openrouter/free" and attempt == 0:
-            model = "openrouter/free"
-            payload["model"] = model
-            continue
-        if response.is_error:
-            raise HTTPException(502, "OpenRouter rechazó la solicitud (HTTP "
-                                + str(response.status_code) + ").")
-        try:
-            content = response.json()["choices"][0]["message"]["content"]
-            if not isinstance(content, str) or not content.strip():
-                raise ValueError("Respuesta vacía")
-            return {"role": role, "model": model, "text": content}
-        except (ValueError, KeyError, IndexError, TypeError) as exc:
-            raise HTTPException(502, "El modelo no entregó texto válido.") from exc
-    raise HTTPException(502, "No fue posible usar el modelo.")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    router_key = os.getenv("OPENROUTER_API_KEY", "")
+    prefer_claude = role in ("Director", "Auditor", "Legal y Contratos")
+    providers = (["claude", "openrouter"] if prefer_claude else ["openrouter", "claude"])
+    failures = []
+    for provider in providers:
+        if provider == "claude" and anthropic_key:
+            model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
+            try:
+                response = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    json={"model": model, "max_tokens": 1600, "temperature": 0.2,
+                          "system": messages[0]["content"], "messages": messages[1:]},
+                    headers={"x-api-key": anthropic_key, "anthropic-version": "2023-06-01",
+                             "content-type": "application/json"})
+                if response.is_success:
+                    blocks = response.json().get("content", [])
+                    content = "\n".join(block.get("text", "") for block in blocks
+                                        if block.get("type") == "text").strip()
+                    if content:
+                        return {"role": role, "provider": "claude", "model": model, "text": content}
+                failures.append("Claude HTTP " + str(response.status_code))
+            except (httpx.HTTPError, ValueError, KeyError, TypeError):
+                failures.append("Claude sin respuesta válida")
+        if provider == "openrouter" and router_key:
+            model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+            try:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    json={"model": model, "messages": messages, "max_tokens": 1600, "temperature": 0.2},
+                    headers={"Authorization": "Bearer " + router_key, "Content-Type": "application/json"})
+                if response.is_success:
+                    content = response.json()["choices"][0]["message"]["content"]
+                    if isinstance(content, str) and content.strip():
+                        return {"role": role, "provider": "openrouter", "model": model, "text": content}
+                failures.append("OpenRouter HTTP " + str(response.status_code))
+            except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
+                failures.append("OpenRouter sin respuesta válida")
+    if not anthropic_key and not router_key:
+        raise HTTPException(503, "Configura ANTHROPIC_API_KEY u OPENROUTER_API_KEY en Railway.")
+    raise HTTPException(502, "Proveedores IA no disponibles: " + "; ".join(failures))
 
 @app.get("/api/office/agents", dependencies=[Depends(authorize)])
 def office_agent_directory():
@@ -423,7 +440,9 @@ def office_agent_directory():
                         "category":"Dirección" if name=="Director" else
                                    "Control" if name=="Auditor" else "Especialista"}
                        for name,description in ROLES.items()],
-            "provider_configured":bool(os.getenv("OPENROUTER_API_KEY"))}
+            "provider_configured":bool(os.getenv("OPENROUTER_API_KEY") or os.getenv("ANTHROPIC_API_KEY")),
+            "providers":{"openrouter":bool(os.getenv("OPENROUTER_API_KEY")),
+                         "claude":bool(os.getenv("ANTHROPIC_API_KEY"))}}
 
 @app.get("/api/office/deliveries", dependencies=[Depends(authorize)])
 def office_deliveries():
@@ -651,7 +670,7 @@ def workspace_page():
 
 @app.get("/oficina")
 def office_page():
-    return FileResponse(ROOT / "centro-mando.html")
+    return FileResponse(ROOT / "oficina-viva.html", headers={"Cache-Control":"no-store, max-age=0"})
 
 @app.get("/clientes")
 def clients_page():
