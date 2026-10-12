@@ -106,18 +106,18 @@ def login(data: LoginIn, response: Response):
         raise HTTPException(401, "Clave incorrecta.")
     stamp = str(int(time.time()))
     response.set_cookie(COOKIE_NAME, stamp + "." + _signature(stamp),
-        max_age=SESSION_SECONDS, httponly=True, secure=True, samesite="strict", path="/")
+        max_age=SESSION_SECONDS, httponly=True, secure=True, samesite="lax", path="/")
     response.headers["Cache-Control"] = "no-store"
     return {"ok": True, "expires_in_days": 7}
 
 @app.post("/api/auth/logout")
 def logout(response: Response):
-    response.delete_cookie(COOKIE_NAME, path="/", secure=True, httponly=True, samesite="strict")
+    response.delete_cookie(COOKIE_NAME, path="/", secure=True, httponly=True, samesite="lax")
     return {"ok": True}
 
 @app.get("/api/auth/status")
 def auth_status(request: Request):
-    return {"authenticated": _valid_session(request.cookies.get(COOKIE_NAME))}
+    return {"authenticated": _valid_session(request.cookies.get(COOKIE_NAME)), "session_days": 7}
 
 
 class RecordIn(BaseModel):
