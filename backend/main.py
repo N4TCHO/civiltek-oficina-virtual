@@ -514,6 +514,23 @@ def letter_docx(letter: LetterIn):
     return StreamingResponse(stream, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": 'attachment; filename="civiltek-carta.docx"'})
 
+@app.get("/api/estados-pago/guardados", dependencies=[Depends(authorize)])
+def listar_estados_pago():
+    with connect() as db:
+        rows = db.execute("SELECT id, title, payload, updated_at FROM records WHERE kind='payment' ORDER BY updated_at DESC LIMIT 100").fetchall()
+    return [{"id": r["id"], "title": r["title"], "updated_at": r["updated_at"],
+             "data": json.loads(r["payload"])} for r in rows]
+
+@app.post("/api/estados-pago/guardar", dependencies=[Depends(authorize)])
+def guardar_estado_pago(data: EstadoPago):
+    calcular(data)
+    payment_id = str(uuid.uuid4())
+    with connect() as db:
+        db.execute("INSERT INTO records VALUES (?,?,?,?,?,?)",
+            (payment_id, "payment", data.contrato+" · EP "+data.numero,
+             data.model_dump_json(), utcnow(), utcnow()))
+    return {"id": payment_id, "saved": True}
+
 @app.post("/api/estados-pago/calcular", dependencies=[Depends(authorize)])
 def calcular_estado_pago(data: EstadoPago):
     rows = calcular(data)
