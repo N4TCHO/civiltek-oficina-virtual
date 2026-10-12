@@ -645,7 +645,7 @@ def workspace_page():
 
 @app.get("/oficina")
 def office_page():
-    return FileResponse(ROOT / "oficina.html")
+    return FileResponse(ROOT / "centro-mando.html")
 
 @app.get("/clientes")
 def clients_page():
