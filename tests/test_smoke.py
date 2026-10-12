@@ -16,7 +16,7 @@ if True:
                 response = client.get("/api/health")
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(response.json()["ok"])
-                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes", "/civiltek-ui.css"):
+                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes", "/civiltek-ui.css", "/estados-pago"):
                     with self.subTest(route=route):
                         self.assertEqual(client.get(route).status_code, 200)
 
@@ -29,6 +29,23 @@ if True:
                 self.assertTrue(login.json()["ok"])
                 self.assertEqual(client.get("/api/auth/status").json()["authenticated"], True)
                 self.assertEqual(client.get("/api/records").status_code, 200)
+
+        def test_payment_calculation_and_export(self):
+            data = {"contrato":"Contrato de prueba","numero":"1","items":[
+                {"codigo":"101","descripcion":"Partida de prueba","unidad":"m3",
+                 "cantidad_contrato":"100","precio_unitario":"5000",
+                 "acumulado_anterior":"20","cantidad_periodo":"30"}]}
+            with TestClient(app, base_url="https://testserver") as client:
+                client.post("/api/auth/login", json={"password":os.environ["CIVILTEK_ADMIN_TOKEN"]})
+                result = client.post("/api/estados-pago/calcular",json=data)
+                self.assertEqual(result.status_code,200,result.text)
+                self.assertEqual(result.json()["totales"]["monto_periodo"],150000)
+                self.assertEqual(result.json()["totales"]["saldo_monto"],250000)
+                excel=client.post("/api/estados-pago/excel",json=data)
+                self.assertEqual(excel.status_code,200,excel.text)
+                self.assertTrue(excel.content.startswith(b"PK"))
+                data["items"][0]["cantidad_periodo"]="90"
+                self.assertEqual(client.post("/api/estados-pago/calcular",json=data).status_code,422)
 
     if __name__ == "__main__":
         unittest.main()
