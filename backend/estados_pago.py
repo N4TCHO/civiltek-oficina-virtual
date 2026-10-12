@@ -1,7 +1,7 @@
 """Estados de pago: cálculos auditables sin modificar el presupuesto aprobado."""
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
@@ -94,3 +94,36 @@ def excel_ep(ep):
     output=BytesIO();wb.save(output);output.seek(0)
     return StreamingResponse(output,media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition":'attachment; filename="civiltek-estado-pago.xlsx"'})
+
+def importar_excel(data: bytes):
+    if len(data)>5*1024*1024:
+        raise HTTPException(413,"El archivo supera 5 MB")
+    try:
+        wb=load_workbook(BytesIO(data),read_only=True,data_only=True)
+    except Exception:
+        raise HTTPException(422,"Archivo Excel inválido")
+    try:
+        ws=wb.active
+        result=[]
+        started=False
+        for row in ws.iter_rows(max_row=1600,values_only=True):
+            if not started:
+                if str(row[0] or "").strip().lower() in ("código","codigo"):
+                    started=True
+                continue
+            if not row[0] or str(row[0]).strip().upper()=="TOTAL":
+                continue
+            values=list(row)+[None]*7
+            if values[1] is None:
+                continue
+            def as_text(value,default="0"):
+                return str(value) if value is not None else default
+            result.append({"codigo":as_text(values[0]),"descripcion":as_text(values[1]),
+                "unidad":as_text(values[2],"un"),"cantidad_contrato":as_text(values[3]),
+                "precio_unitario":as_text(values[4]),"acumulado_anterior":as_text(values[5]),
+                "cantidad_periodo":as_text(values[6])})
+        if not started or not result:
+            raise HTTPException(422,"No se encontró una tabla Civiltek con encabezado Código")
+        return result
+    finally:
+        wb.close()
