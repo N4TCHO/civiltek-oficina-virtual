@@ -383,3 +383,7 @@ def agents_page():
 @app.get("/workspace")
 def workspace_page():
     return FileResponse(ROOT / "workspace.html")
+
+@app.get("/oficina")
+def office_page():
+    return FileResponse(ROOT / "oficina.html")
