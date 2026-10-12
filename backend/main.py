@@ -385,7 +385,7 @@ async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, 
         raise HTTPException(503, "Configura OPENROUTER_API_KEY en Railway.")
     model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     messages = [{"role": "system", "content": _agent_system(role)},
-                {"role": "user", "content": instruction + "\\n\\nANTECEDENTES:\\n" + context}]
+                {"role": "user", "content": instruction + "\n\nANTECEDENTES:\n" + context}]
     payload = {"model": model, "messages": messages, "max_tokens": 1250, "temperature": 0.2}
     headers = {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}
     for attempt in range(2):
@@ -420,8 +420,8 @@ async def execute_office(request: OfficeRequest):
             "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". "
             "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "
             "y después PLAN: y el plan. No uses otros roles.",
-            "Proyecto: " + request.project + "\\nObjetivo: " + request.objective
-            + "\\n" + request.context)
+            "Proyecto: " + request.project + "\nObjetivo: " + request.objective
+            + "\n" + request.context)
         import re
         allowed = tuple(role for role in ROLES if role not in ("Director", "Auditor"))
         match = re.search(r"(?im)^ROLES:\\s*(.+)$", director["text"])
@@ -437,17 +437,17 @@ async def execute_office(request: OfficeRequest):
                 "Realiza TU parte del encargo y produce un entregable útil, concreto y "
                 "estructurado. No digas que ejecutaste acciones externas. "
                 "Si faltan documentos, deja pendientes específicos.",
-                "Proyecto: " + request.project + "\\nObjetivo: " + request.objective
-                + "\\nAntecedentes: " + request.context
-                + "\\nPlan del director: " + director["text"][:2500])
+                "Proyecto: " + request.project + "\nObjetivo: " + request.objective
+                + "\nAntecedentes: " + request.context
+                + "\nPlan del director: " + director["text"][:2500])
             outputs.append(output)
         auditor = await _ask_provider(
             client, "Auditor",
             "Audita los entregables: detecta afirmaciones no verificadas, riesgos, "
             "errores, datos faltantes y condiciones de aprobación. "
             "Emite un dictamen BORRADOR REQUIERE REVISION HUMANA.",
-            "Objetivo: " + request.objective + "\\n"
-            + "\\n".join(x["role"] + ": " + x["text"][:5000] for x in outputs))
+            "Objetivo: " + request.objective + "\n"
+            + "\n".join(x["role"] + ": " + x["text"][:5000] for x in outputs))
     now = utcnow()
     item_id = str(uuid.uuid4())
     result = {"id": item_id, "project": request.project, "objective": request.objective,
@@ -478,7 +478,7 @@ def office_docx(item_id: str):
         (x["role"] + " | Entregable", x["text"]) for x in result["specialists"]
     ] + [("Auditor | Observaciones", result["auditor"]["text"])]:
         doc.add_heading(title, level=1)
-        for line in body.split("\\n"):
+        for line in body.split("\n"):
             doc.add_paragraph(line)
     stream = io.BytesIO()
     doc.save(stream)
