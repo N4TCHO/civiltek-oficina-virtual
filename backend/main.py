@@ -1,4 +1,5 @@
-"""Civiltek API: single-admin MVP. Configure a private persistent volume before production."""\nimport hmac
+"""Civiltek API: single-admin MVP. Configure a private persistent volume before production."""
+import hmac
 import hashlib
 import base64
 import time
@@ -38,7 +39,8 @@ ROLES = {
     "Ingeniería y Obras": "Desarrolla memorias, especificaciones, cubicaciones y revisión técnica de proyectos; no certifica ni firma diseños.",
     "Finanzas": "Evalúa costos, flujo de caja, estados de pago y escenarios financieros.",
     "Topografía y GIS": "Revisa antecedentes topográficos, georreferenciación, cubicaciones y entregables cartográficos.",
-    "Recursos Humanos": "Prepara políticas, procedimientos y documentación laboral con revisión normativa."\n}
+    "Recursos Humanos": "Prepara políticas, procedimientos y documentación laboral con revisión normativa."
+}
 
 def utcnow():
     return datetime.now(timezone.utc).isoformat()
@@ -65,7 +67,8 @@ def setup():
         db.execute("""CREATE INDEX IF NOT EXISTS idx_records_kind ON records(kind)""")
 
 SESSION_SECONDS = 7 * 24 * 60 * 60
-COOKIE_NAME = "civiltek_session"\n
+COOKIE_NAME = "civiltek_session"
+
 def _signature(value: str) -> str:
     digest = hmac.new(TOKEN.encode(), value.encode(), hashlib.sha256).digest()
     return base64.urlsafe_b64encode(digest).decode().rstrip("=")
@@ -104,7 +107,8 @@ def login(data: LoginIn, response: Response):
     stamp = str(int(time.time()))
     response.set_cookie(COOKIE_NAME, stamp + "." + _signature(stamp),
         max_age=SESSION_SECONDS, httponly=True, secure=True, samesite="lax", path="/")
-    response.headers["Cache-Control"] = "no-store"\n    return {"ok": True, "expires_in_days": 7}
+    response.headers["Cache-Control"] = "no-store"
+    return {"ok": True, "expires_in_days": 7}
 
 @app.post("/api/auth/logout")
 def logout(response: Response):
@@ -176,7 +180,10 @@ async def run_agent(task: TaskIn):
         raise HTTPException(503, "OPENROUTER_API_KEY is not configured")
     model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     system = ("Eres un especialista de la consultora Civiltek, Chile. " + ROLES[task.role] +
-        " Responde en español chileno profesional. No inventes leyes, valores de mercado, "\n        "normas MOP, documentos ni resultados de ensayos. Identifica los datos faltantes, "\n        "explicita supuestos y exige revisión humana antes de presentar documentos oficiales. "\n        "No ejecutes acciones externas ni afirmes que las ejecutaste.")
+        " Responde en español chileno profesional. No inventes leyes, valores de mercado, "
+        "normas MOP, documentos ni resultados de ensayos. Identifica los datos faltantes, "
+        "explicita supuestos y exige revisión humana antes de presentar documentos oficiales. "
+        "No ejecutes acciones externas ni afirmes que las ejecutaste.")
     payload = {"model": model, "messages": [
         {"role": "system", "content": system},
         {"role": "user", "content": task.instructions + ("\n\nAntecedentes:\n" + task.context if task.context else "")}
