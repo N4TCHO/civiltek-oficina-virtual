@@ -552,6 +552,10 @@ def calcular_estado_pago(data: EstadoPago):
 def descargar_estado_pago(data: EstadoPago):
     return excel_ep(data)
 
+@app.get("/apu")
+def apu_page():
+    return FileResponse(ROOT / "apu.html")
+
 @app.get("/estudio-licitaciones")
 def estudio_licitaciones_page():
     return FileResponse(ROOT / "estudio-licitaciones.html")
