@@ -44,6 +44,11 @@ if True:
                 excel=client.post("/api/estados-pago/excel",json=data)
                 self.assertEqual(excel.status_code,200,excel.text)
                 self.assertTrue(excel.content.startswith(b"PK"))
+                imported=client.post("/api/estados-pago/importar",
+                    files={"file":("estado.xlsx",excel.content,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})
+                self.assertEqual(imported.status_code,200,imported.text)
+                self.assertEqual(imported.json()["items"][0]["codigo"],"101")
                 saved=client.post("/api/estados-pago/guardar",json=data)
                 self.assertEqual(saved.status_code,200,saved.text)
                 self.assertTrue(saved.json()["saved"])
