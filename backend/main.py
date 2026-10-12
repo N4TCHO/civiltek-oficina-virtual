@@ -607,7 +607,7 @@ def descargar_estado_pago(data: EstadoPago):
 
 @app.get("/oficina-v2")
 def office_v2_page():
-    return FileResponse(ROOT / "centro-mando.html", headers={"Cache-Control":"no-store, max-age=0","Pragma":"no-cache"})
+    return FileResponse(ROOT / "oficina-viva.html", headers={"Cache-Control":"no-store, max-age=0","Pragma":"no-cache"})
 
 @app.get("/centro-mando")
 def centro_mando_page():
