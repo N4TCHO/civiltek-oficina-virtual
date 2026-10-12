@@ -279,7 +279,7 @@ async def execute_office(request: OfficeRequest):
         director = await _ask_provider(
             client, "Director",
             "Clasifica el encargo y redacta un plan breve. Elige hasta DOS especialistas "
-            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". ""
+            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". "
             "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "
             "y después PLAN: y el plan. No uses otros roles.",
             "Proyecto: " + request.project + "\\nObjetivo: " + request.objective
