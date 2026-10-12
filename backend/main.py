@@ -19,6 +19,8 @@ from backend.estados_pago import EstadoPago, calcular, totales, excel_ep, import
 from backend.operations import configure as configure_operations
 from backend.licitaciones import configure as configure_licitaciones
 from backend.apu import router as apu_router
+from backend.office_jobs import configure as configure_office_jobs
+import asyncio
 from fastapi import FastAPI, Depends, Header, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -783,3 +785,30 @@ app.include_router(configure_operations(connect, utcnow), dependencies=[Depends(
 app.include_router(configure_licitaciones(connect, utcnow), dependencies=[Depends(authorize)])
 
 app.include_router(apu_router, dependencies=[Depends(authorize)])
+
+async def _run_office_job(objective, project, context):
+    return await execute_office(OfficeRequest(objective=objective,project=project,context=context))
+
+jobs_router, office_worker = configure_office_jobs(connect, _run_office_job)
+app.include_router(jobs_router,dependencies=[Depends(authorize)])
+
+@app.on_event("startup")
+async def start_office_worker():
+    # Recover jobs interrupted by a restart; they are idempotent only at the queue level.
+    with connect() as db:
+        rows=db.execute("SELECT id,payload FROM records WHERE kind='office_job' AND json_extract(payload,'$.status')='Trabajando'").fetchall()
+        for row in rows:
+            job=json.loads(row["payload"])
+            job["status"]="En cola"
+            job["stage"]="Recuperado tras reinicio"
+            db.execute("UPDATE records SET payload=?,updated_at=? WHERE id=?",
+                       (json.dumps(job,ensure_ascii=False),utcnow(),row["id"]))
+    app.state.office_worker_task=asyncio.create_task(office_worker())
+
+@app.on_event("shutdown")
+async def stop_office_worker():
+    task=getattr(app.state,"office_worker_task",None)
+    if task:
+        task.cancel()
+        try:await task
+        except asyncio.CancelledError:pass
