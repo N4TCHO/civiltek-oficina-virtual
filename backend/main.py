@@ -550,6 +550,10 @@ def calcular_estado_pago(data: EstadoPago):
 def descargar_estado_pago(data: EstadoPago):
     return excel_ep(data)
 
+@app.get("/operaciones")
+def operaciones_page():
+    return FileResponse(ROOT / "operaciones.html")
+
 @app.get("/estados-pago")
 def estados_pago_page():
     return FileResponse(ROOT / "estados-pago.html")
