@@ -229,6 +229,75 @@ async def run_agent(task: TaskIn):
         raise HTTPException(502, "No fue posible obtener respuesta de OpenRouter. Comprueba disponibilidad del proveedor.") from exc
     return {"role": task.role, "model": selected_model, "draft": answer, "requires_human_review": True}
 
+# Official-source opportunity intake: only public procurement metadata.
+# The API ticket stays on the server; never return it to the browser.
+class OpportunityScanIn(BaseModel):
+    terms: list[str] = Field(default_factory=lambda: [
+        "asesoría", "prevención de riesgos", "medio ambiente", "auditoría",
+        "ingeniería", "topografía", "conservación vial", "consultoría"
+    ], max_length=20)
+
+@app.get("/api/integrations/status", dependencies=[Depends(authorize)])
+def integration_status():
+    return {"mercado_publico": {"configured": bool(os.getenv("MERCADOPUBLICO_TICKET")),
+                                 "source": "ChileCompra API oficial",
+                                 "requires_ticket": True},
+            "economic": {"source": "Banco Central BDE", "configured": False},
+            "environment": {"source": "IDE MMA WMS/WFS", "configured": False}}
+
+@app.post("/api/opportunities/scan", dependencies=[Depends(authorize)])
+async def scan_opportunities(scan: OpportunityScanIn):
+    ticket = os.getenv("MERCADOPUBLICO_TICKET", "").strip()
+    if not ticket:
+        raise HTTPException(503, "Falta MERCADOPUBLICO_TICKET en Railway. No se ha consultado ChileCompra.")
+    terms = [term.strip().lower() for term in scan.terms if 2 <= len(term.strip()) <= 100]
+    if not terms:
+        raise HTTPException(422, "Indica al menos una palabra clave válida.")
+    url = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"
+    try:
+        async with httpx.AsyncClient(timeout=35) as client:
+            response = await client.get(url, params={"estado": "activas", "ticket": ticket})
+            response.raise_for_status()
+            data = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(502, "No se pudo consultar la API oficial de ChileCompra.") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("Listado"), list):
+        raise HTTPException(502, "ChileCompra devolvió una estructura inesperada.")
+    matches = []
+    for item in data["Listado"]:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("CodigoExterno", "")).strip()
+        name = str(item.get("Nombre", "")).strip()
+        description = str(item.get("Descripcion", "")).strip()
+        if not code or not name or not any(t in (name + " " + description).lower() for t in terms):
+            continue
+        matches.append({"code": code, "name": name, "description": description[:1200],
+                        "close_date": item.get("FechaCierre"),
+                        "source": "Dirección ChileCompra", "status": "Por evaluar"})
+    saved = 0
+    with connect() as db:
+        for item in matches[:200]:
+            existing = db.execute("SELECT id FROM records WHERE kind='opportunity' AND json_extract(payload, '$.code')=?",
+                                  (item["code"],)).fetchone()
+            if existing:
+                continue
+            now = utcnow()
+            db.execute("INSERT INTO records VALUES(?,?,?,?,?,?)",
+                       (str(uuid.uuid4()), "opportunity", item["name"][:200],
+                        json.dumps(item, ensure_ascii=False), now, now))
+            saved += 1
+    return {"source": "Dirección ChileCompra", "matches": len(matches),
+            "new_saved": saved, "results": matches[:100],
+            "note": "Coincidencia por palabras clave, no evaluación de admisibilidad."}
+
+@app.get("/api/opportunities", dependencies=[Depends(authorize)])
+def list_opportunities():
+    with connect() as db:
+        rows = db.execute("SELECT * FROM records WHERE kind='opportunity' ORDER BY created_at DESC LIMIT 200").fetchall()
+    return [dict(r) | {"payload": json.loads(r["payload"])} for r in rows]
+
+
 class ClientIn(BaseModel):
     name: str = Field(min_length=2, max_length=200)
     contact: str = Field(default="", max_length=250)
