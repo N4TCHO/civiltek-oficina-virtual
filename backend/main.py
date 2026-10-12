@@ -229,6 +229,75 @@ async def run_agent(task: TaskIn):
         raise HTTPException(502, "No fue posible obtener respuesta de OpenRouter. Comprueba disponibilidad del proveedor.") from exc
     return {"role": task.role, "model": selected_model, "draft": answer, "requires_human_review": True}
 
+class ClientIn(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    contact: str = Field(default="", max_length=250)
+    notes: str = Field(default="", max_length=2000)
+
+class ClientRequestIn(BaseModel):
+    client_id: str
+    service: str = Field(min_length=3, max_length=200)
+    objective: str = Field(min_length=12, max_length=8000)
+    context: str = Field(default="", max_length=16000)
+    deadline: str = Field(default="", max_length=30)
+
+@app.get("/api/clients", dependencies=[Depends(authorize)])
+def list_clients():
+    with connect() as db:
+        rows = db.execute("SELECT * FROM records WHERE kind='client' ORDER BY updated_at DESC LIMIT 500").fetchall()
+    return [dict(r) | {"payload": json.loads(r["payload"])} for r in rows]
+
+@app.post("/api/clients", dependencies=[Depends(authorize)])
+def add_client(client: ClientIn):
+    item_id, now = str(uuid.uuid4()), utcnow()
+    payload = {"name": client.name, "contact": client.contact, "notes": client.notes}
+    with connect() as db:
+        db.execute("INSERT INTO records VALUES(?,?,?,?,?,?)",
+                   (item_id, "client", client.name, json.dumps(payload, ensure_ascii=False), now, now))
+    return {"id": item_id, "name": client.name}
+
+@app.get("/api/client-requests", dependencies=[Depends(authorize)])
+def list_client_requests():
+    with connect() as db:
+        rows = db.execute("SELECT * FROM records WHERE kind='client_request' ORDER BY updated_at DESC LIMIT 500").fetchall()
+    return [dict(r) | {"payload": json.loads(r["payload"])} for r in rows]
+
+@app.post("/api/client-requests", dependencies=[Depends(authorize)])
+def add_client_request(item: ClientRequestIn):
+    with connect() as db:
+        client = db.execute("SELECT id,title FROM records WHERE id=? AND kind='client'", (item.client_id,)).fetchone()
+        if not client:
+            raise HTTPException(404, "Cliente no encontrado")
+        item_id, now = str(uuid.uuid4()), utcnow()
+        payload = item.model_dump() if hasattr(item, "model_dump") else item.dict()
+        payload.update({"client_name": client["title"], "status": "Pendiente de asignación", "office_id": None})
+        db.execute("INSERT INTO records VALUES(?,?,?,?,?,?)",
+                   (item_id, "client_request", item.service + ": " + item.objective[:150],
+                    json.dumps(payload, ensure_ascii=False), now, now))
+    return {"id": item_id, "status": "Pendiente de asignación"}
+
+@app.post("/api/client-requests/{request_id}/dispatch", dependencies=[Depends(authorize)])
+async def dispatch_client_request(request_id: str):
+    with connect() as db:
+        row = db.execute("SELECT payload FROM records WHERE id=? AND kind='client_request'", (request_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Solicitud no encontrada")
+    payload = json.loads(row["payload"])
+    if payload.get("office_id"):
+        raise HTTPException(409, "Esta solicitud ya tiene un expediente")
+    result = await execute_office(OfficeRequest(
+        objective=payload["service"] + ": " + payload["objective"],
+        project=payload["client_name"],
+        context=payload.get("context", "") + "\\nPlazo indicado: " + payload.get("deadline", "")))
+    with connect() as db:
+        latest = db.execute("SELECT payload FROM records WHERE id=? AND kind='client_request'", (request_id,)).fetchone()
+        latest_payload = json.loads(latest["payload"])
+        latest_payload.update({"status": "Revisión humana pendiente", "office_id": result["id"]})
+        db.execute("UPDATE records SET payload=?,updated_at=? WHERE id=?",
+                   (json.dumps(latest_payload, ensure_ascii=False), utcnow(), request_id))
+    return {"id": request_id, "office_id": result["id"], "status": "Revisión humana pendiente"}
+
+
 class OfficeRequest(BaseModel):
     objective: str = Field(min_length=12, max_length=8000)
     project: str = Field(default="Civiltek", max_length=200)
