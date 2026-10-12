@@ -540,3 +540,53 @@ def clients_page():
 @app.get("/oportunidades")
 def opportunities_page():
     return FileResponse(ROOT / "oportunidades.html")
+
+@app.get("/api/dashboard", dependencies=[Depends(authorize)])
+def dashboard():
+    with connect() as db:
+        rows = db.execute("SELECT kind, payload, created_at, updated_at, id, title FROM records WHERE kind IN ('client','client_request','opportunity','task') ORDER BY updated_at DESC LIMIT 500").fetchall()
+    clients, requests, opportunities, tasks = [], [], [], []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload"])
+        except (ValueError, TypeError):
+            continue
+        item = {"id": row["id"], "title": row["title"], "created_at": row["created_at"],
+                "updated_at": row["updated_at"], "payload": payload}
+        {"client": clients, "client_request": requests, "opportunity": opportunities, "task": tasks}[row["kind"]].append(item)
+    pending = [x for x in requests if x["payload"].get("status") != "Aprobado"]
+    reviews = [x for x in requests if x["payload"].get("status") == "Revisión humana pendiente"]
+    return {"counts": {"clients": len(clients), "requests": len(requests),
+                       "pending": len(pending), "reviews": len(reviews),
+                       "opportunities": len(opportunities), "dossiers": len(tasks)},
+            "requests": requests[:40], "opportunities": opportunities[:15],
+            "integration": {"mercado_publico": bool(os.getenv("MERCADOPUBLICO_TICKET")),
+                            "openrouter": bool(os.getenv("OPENROUTER_API_KEY"))},
+            "generated_at": utcnow()}
+
+class ReviewDecision(BaseModel):
+    decision: str
+    notes: str = Field(default="", max_length=4000)
+
+@app.post("/api/client-requests/{request_id}/review", dependencies=[Depends(authorize)])
+def review_client_request(request_id: str, decision: ReviewDecision):
+    if decision.decision not in ("approve", "changes"):
+        raise HTTPException(422, "Decisión inválida")
+    with connect() as db:
+        row = db.execute("SELECT payload FROM records WHERE id=? AND kind='client_request'", (request_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Encargo no encontrado")
+        payload = json.loads(row["payload"])
+        if payload.get("status") != "Revisión humana pendiente" or not payload.get("office_id"):
+            raise HTTPException(409, "No hay expediente pendiente de revisión")
+        payload["status"] = "Aprobado" if decision.decision == "approve" else "Requiere correcciones"
+        payload["review_notes"] = decision.notes
+        payload["reviewed_at"] = utcnow()
+        db.execute("UPDATE records SET payload=?, updated_at=? WHERE id=?",
+                   (json.dumps(payload, ensure_ascii=False), utcnow(), request_id))
+    return {"id": request_id, "status": payload["status"],
+            "note": "La aprobación interna no envía ni firma documentos."}
+
+@app.get("/panel")
+def dashboard_page():
+    return FileResponse(ROOT / "panel.html")
