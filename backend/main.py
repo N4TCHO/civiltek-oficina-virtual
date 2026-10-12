@@ -668,6 +668,10 @@ def agents_page():
 def workspace_page():
     return FileResponse(ROOT / "workspace.html")
 
+@app.get("/oficina-3d")
+def office_3d_page():
+    return FileResponse(ROOT / "oficina-viva.html", headers={"Cache-Control":"no-store, max-age=0", "Pragma":"no-cache"})
+
 @app.get("/oficina-3d.js")
 def office_3d_script():
     return FileResponse(ROOT / "oficina-3d.js", media_type="text/javascript", headers={"Cache-Control":"no-cache"})
