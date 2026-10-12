@@ -25,3 +25,20 @@ h1,h2,h3{letter-spacing:-.025em}p{line-height:1.65}
 .layout .login{box-shadow:0 30px 75px rgba(0,0,0,.28);border:1px solid #34536a}
 @media(max-width:900px){.layout .side{display:block;padding:12px 14px}.layout .side>div{display:inline-block;vertical-align:middle}.layout .side nav{display:flex;gap:5px;overflow-x:auto;padding:7px 0;scrollbar-width:thin}.layout .side nav a{white-space:nowrap;flex-shrink:0}.layout .side nav a.active{border-left:0;border-bottom:2px solid var(--ct-accent)}}
 @media(max-width:520px){.layout .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.layout .metric b{font-size:clamp(24px,7vw,32px)}.layout .card{padding:15px}.layout .main{padding:18px 12px}.layout .top{align-items:flex-start}}
+
+/* Civiltek APU-inspired premium identity: graphite, petroleum blue and emerald */
+:root{--ct-accent:#43dcc5;--ct-bg:#08121c;--ct-border:#29445a;--ct-text:#f0f7fd;--ct-muted:#9bb4c9}
+body{background-color:#08121c;background-image:radial-gradient(ellipse 75% 45% at 85% -10%,rgba(31,152,148,.18),transparent 75%),radial-gradient(ellipse 55% 45% at -15% 95%,rgba(30,71,122,.19),transparent 80%)}
+.panel,.card,.metric,.tile,section.panel{border-color:#2a4659!important;background:linear-gradient(145deg,rgba(22,43,59,.97),rgba(12,27,42,.98))!important;box-shadow:0 16px 42px rgba(0,0,0,.17),inset 0 1px 0 rgba(255,255,255,.035);border-radius:18px!important}
+h1{font-weight:850;letter-spacing:-.045em}h2{font-weight:750;letter-spacing:-.028em}
+button:not(.secondary):not(.alt):not(.danger),.btn{background:linear-gradient(125deg,#58e6cb,#2cb6ad);color:#061c26;box-shadow:0 6px 20px rgba(43,198,177,.13)}
+button.secondary,button.alt{background:#213a4d!important;color:#e6f5fa!important;border:1px solid #35566a}
+input,select,textarea{background:#0b1b2b!important;border-color:#365569!important;border-radius:10px!important}
+table thead{background:#102e3c}table th{color:#70e2d2!important;font-weight:750;letter-spacing:.025em}
+table tbody tr:hover{background:rgba(64,184,172,.055)}
+a{color:#65e3d3}::selection{background:#1b766f;color:#fff}
+.layout .brand{color:#65e3d3;text-shadow:0 0 32px rgba(72,221,201,.13)}
+.layout .side nav a:hover{background:#1d3c4a}
+.summary article{background:linear-gradient(145deg,#153a44,#0f283b)!important;border:1px solid #36616a!important;border-radius:16px!important;box-shadow:0 10px 32px rgba(0,0,0,.13)}
+.summary article b{font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+@media(max-width:600px){.panel,.card,.tile{border-radius:14px!important}header{gap:12px}header nav{line-height:2}}
