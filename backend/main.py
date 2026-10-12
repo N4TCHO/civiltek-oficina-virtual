@@ -463,6 +463,32 @@ async def execute_office(request: OfficeRequest):
                     json.dumps(result, ensure_ascii=False), now, now))
     return result
 
+@app.post("/api/licitaciones/expedientes/{ident}/ejecutar", dependencies=[Depends(authorize)])
+async def ejecutar_estudio_licitacion(ident: str):
+    """Orquestación real sobre los antecedentes guardados, con revisión humana obligatoria."""
+    with connect() as db:
+        row = db.execute("SELECT payload FROM records WHERE id=? AND kind='tender'", (ident,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Expediente no encontrado")
+    tender = json.loads(row["payload"])
+    docs = tender.get("documents", [])
+    if not docs:
+        raise HTTPException(422, "Primero incorpora las bases y anexos del expediente.")
+    context = "LICITACIÓN: " + tender["name"] + "\\nMANDANTE: " + tender.get("client", "")
+    context += "\\nDOCUMENTOS Y TEXTO EXTRAÍDO:\\n"
+    for doc in docs[:15]:
+        context += "\\n### FUENTE: " + doc["filename"] + " (id " + doc["id"] + ")\\n"
+        context += doc["text"][:12000] + "\\n"
+        if len(context) > 55000:
+            break
+    objective = ("Estudiar las bases de esta licitación y elaborar un expediente preliminar. "
+                 "Identificar requisitos con citas al nombre del archivo y fragmentos literales, "
+                 "requisitos de admisibilidad, garantías, plazos, antecedentes faltantes, "
+                 "partidas y APU necesarios, metodología, programación y planes exigidos. "
+                 "NO inventar precios, rendimientos, cubicaciones, normas ni condiciones.")
+    return await execute_office(OfficeRequest(objective=objective,
+                                                project=tender["name"], context=context))
+
 @app.get("/api/office/{item_id}/docx", dependencies=[Depends(authorize)])
 def office_docx(item_id: str):
     with connect() as db:
