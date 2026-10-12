@@ -18,6 +18,7 @@ from docx import Document
 from backend.estados_pago import EstadoPago, calcular, totales, excel_ep, importar_excel
 from backend.operations import configure as configure_operations
 from backend.licitaciones import configure as configure_licitaciones
+from backend.apu import router as apu_router
 from fastapi import FastAPI, Depends, Header, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -721,3 +722,5 @@ def download_attachment(request_id: str, attachment_id: str):
 app.include_router(configure_operations(connect, utcnow), dependencies=[Depends(authorize)])
 
 app.include_router(configure_licitaciones(connect, utcnow), dependencies=[Depends(authorize)])
+
+app.include_router(apu_router, dependencies=[Depends(authorize)])
