@@ -17,7 +17,7 @@ if True:
                 response = client.get("/api/health")
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(response.json()["ok"])
-                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes", "/civiltek-ui.css", "/estados-pago"):
+                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes", "/civiltek-ui.css", "/estados-pago", "/operaciones"):
                     with self.subTest(route=route):
                         self.assertEqual(client.get(route).status_code, 200)
 
@@ -30,6 +30,31 @@ if True:
                 self.assertTrue(login.json()["ok"])
                 self.assertEqual(client.get("/api/auth/status").json()["authenticated"], True)
                 self.assertEqual(client.get("/api/records").status_code, 200)
+
+        def test_operations_audit_and_approval_gates(self):
+            with TestClient(app,base_url="https://testserver",headers={"Origin":"https://testserver"}) as client:
+                client.post("/api/auth/login",json={"password":os.environ["CIVILTEK_ADMIN_TOKEN"]})
+                templates=client.get("/api/operations/templates")
+                self.assertEqual(templates.status_code,200)
+                self.assertIn("quality",templates.json())
+                create=client.post("/api/operations/workflows",json={
+                    "title":"Control de calidad de prueba","project":"Obra de prueba",
+                    "template":"quality","priority":"Alta"})
+                self.assertEqual(create.status_code,200,create.text)
+                wid=create.json()["id"];base="/api/operations/workflows/"+wid
+                self.assertEqual(client.post(base+"/status",json={"status":"Aprobado","note":"No"}).status_code,409)
+                self.assertEqual(client.post(base+"/status",json={"status":"En ejecución"}).status_code,200)
+                self.assertEqual(client.post(base+"/status",json={"status":"En revisión"}).status_code,200)
+                self.assertEqual(client.post(base+"/status",json={"status":"Aprobado"}).status_code,422)
+                self.assertEqual(client.post(base+"/status",json={"status":"Aprobado","note":"Revisado"}).status_code,200)
+                self.assertEqual(client.post(base+"/status",json={"status":"Cerrado"}).status_code,409)
+                for i in range(5):
+                    self.assertEqual(client.post(base+"/steps/"+str(i)).status_code,200)
+                self.assertEqual(client.post(base+"/status",json={"status":"Cerrado"}).status_code,200)
+                history=client.get(base+"/history")
+                self.assertGreaterEqual(len(history.json()),9)
+                listed=client.get("/api/operations/workflows")
+                self.assertTrue(any(x["id"]==wid and x["status"]=="Cerrado" for x in listed.json()))
 
         def test_agent_workflow_with_mock_provider(self):
             async def mock_provider(client, role, instruction, context):
