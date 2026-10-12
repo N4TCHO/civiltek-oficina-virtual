@@ -14,7 +14,6 @@ import httpx
 from docx import Document
 from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -177,5 +176,6 @@ def index():
 def letters_page():
     return FileResponse(ROOT / "cartas.html")
 
-# No API routes are exposed by the static mount.
-app.mount("/static", StaticFiles(directory=str(ROOT)), name="static")
+@app.get("/agentes")
+def agents_page():
+    return FileResponse(ROOT / "agentes.html")
