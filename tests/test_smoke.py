@@ -44,6 +44,12 @@ if True:
                 excel=client.post("/api/estados-pago/excel",json=data)
                 self.assertEqual(excel.status_code,200,excel.text)
                 self.assertTrue(excel.content.startswith(b"PK"))
+                saved=client.post("/api/estados-pago/guardar",json=data)
+                self.assertEqual(saved.status_code,200,saved.text)
+                self.assertTrue(saved.json()["saved"])
+                listed=client.get("/api/estados-pago/guardados")
+                self.assertEqual(listed.status_code,200,listed.text)
+                self.assertTrue(any(x["id"]==saved.json()["id"] for x in listed.json()))
                 data["items"][0]["cantidad_periodo"]="90"
                 self.assertEqual(client.post("/api/estados-pago/calcular",json=data).status_code,422)
 
