@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 from docx import Document
-from fastapi import FastAPI, Depends, Header, HTTPException, Request, Response
+from fastapi import FastAPI, Depends, Header, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -590,3 +590,76 @@ def review_client_request(request_id: str, decision: ReviewDecision):
 @app.get("/panel")
 def dashboard_page():
     return FileResponse(ROOT / "panel.html")
+
+# Documents are kept outside the public web root, in the same persistent volume as SQLite.
+UPLOAD_DIR = DB_PATH.parent / "attachments"
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".txt", ".png", ".jpg", ".jpeg"}
+MAX_ATTACHMENT_BYTES = 12 * 1024 * 1024
+
+@app.post("/api/client-requests/{request_id}/attachments", dependencies=[Depends(authorize)])
+async def upload_attachment(request_id: str, file: UploadFile = File(...)):
+    with connect() as db:
+        parent = db.execute("SELECT id FROM records WHERE id=? AND kind='client_request'", (request_id,)).fetchone()
+    if not parent:
+        raise HTTPException(404, "Encargo no encontrado")
+    original = Path(file.filename or "").name
+    ext = Path(original).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS or not original or len(original) > 180:
+        raise HTTPException(422, "Tipo de archivo no admitido")
+    content = await file.read(MAX_ATTACHMENT_BYTES + 1)
+    await file.close()
+    if len(content) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(413, "El archivo supera los 12 MB")
+    # Reject obvious mismatched file signatures for common binary formats.
+    if ext == ".pdf" and not content.startswith(b"%PDF-"):
+        raise HTTPException(422, "El contenido no corresponde a un PDF")
+    if ext in {".docx", ".xlsx"} and not content.startswith(b"PK"):
+        raise HTTPException(422, "Archivo Office inválido")
+    item_id = str(uuid.uuid4())
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    destination = UPLOAD_DIR / (item_id + ext)
+    try:
+        with destination.open("xb") as out:
+            out.write(content)
+        now = utcnow()
+        metadata = {"request_id": request_id, "filename": original, "bytes": len(content),
+                    "stored_name": destination.name, "sha256": hashlib.sha256(content).hexdigest()}
+        with connect() as db:
+            db.execute("INSERT INTO records VALUES(?,?,?,?,?,?)",
+                       (item_id, "attachment", original,
+                        json.dumps(metadata, ensure_ascii=False), now, now))
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return {"id": item_id, "filename": original, "bytes": len(content)}
+
+@app.get("/api/client-requests/{request_id}/attachments", dependencies=[Depends(authorize)])
+def list_attachments(request_id: str):
+    with connect() as db:
+        parent = db.execute("SELECT id FROM records WHERE id=? AND kind='client_request'", (request_id,)).fetchone()
+        if not parent:
+            raise HTTPException(404, "Encargo no encontrado")
+        rows = db.execute("SELECT id,payload,created_at FROM records WHERE kind='attachment' AND json_extract(payload,'$.request_id')=? ORDER BY created_at DESC",
+                          (request_id,)).fetchall()
+    return [{"id": row["id"], "created_at": row["created_at"],
+             "filename": json.loads(row["payload"])["filename"],
+             "bytes": json.loads(row["payload"])["bytes"]} for row in rows]
+
+@app.get("/api/client-requests/{request_id}/attachments/{attachment_id}", dependencies=[Depends(authorize)])
+def download_attachment(request_id: str, attachment_id: str):
+    with connect() as db:
+        row = db.execute("SELECT payload FROM records WHERE id=? AND kind='attachment'", (attachment_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Adjunto no encontrado")
+    payload = json.loads(row["payload"])
+    if payload["request_id"] != request_id:
+        raise HTTPException(404, "Adjunto no encontrado")
+    stored = payload["stored_name"]
+    if Path(stored).name != stored:
+        raise HTTPException(500, "Nombre de archivo inválido")
+    path = UPLOAD_DIR / stored
+    if not path.is_file():
+        raise HTTPException(404, "Archivo no disponible en el volumen")
+    return FileResponse(path, filename=payload["filename"],
+                        media_type="application/octet-stream",
+                        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
