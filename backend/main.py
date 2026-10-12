@@ -668,6 +668,10 @@ def agents_page():
 def workspace_page():
     return FileResponse(ROOT / "workspace.html")
 
+@app.get("/oficina-3d.js")
+def office_3d_script():
+    return FileResponse(ROOT / "oficina-3d.js", media_type="text/javascript", headers={"Cache-Control":"no-cache"})
+
 @app.get("/oficina-isometrica.css")
 def office_iso_css():
     return FileResponse(ROOT / "oficina-isometrica.css", media_type="text/css", headers={"Cache-Control":"no-cache"})
