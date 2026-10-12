@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 from docx import Document
-from backend.estados_pago import EstadoPago, calcular, totales, excel_ep
+from backend.estados_pago import EstadoPago, calcular, totales, excel_ep, importar_excel
 from fastapi import FastAPI, Depends, Header, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -513,6 +513,13 @@ def letter_docx(letter: LetterIn):
     stream.seek(0)
     return StreamingResponse(stream, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": 'attachment; filename="civiltek-carta.docx"'})
+
+@app.post("/api/estados-pago/importar", dependencies=[Depends(authorize)])
+async def importar_estado_pago(file: UploadFile = File(...)):
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(422, "Solo se aceptan archivos .xlsx")
+    data = await file.read(5*1024*1024+1)
+    return {"items": importar_excel(data)}
 
 @app.get("/api/estados-pago/guardados", dependencies=[Depends(authorize)])
 def listar_estados_pago():
