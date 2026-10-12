@@ -455,7 +455,7 @@ async def execute_office(request: OfficeRequest):
             + "\n" + request.context)
         import re
         allowed = tuple(role for role in ROLES if role not in ("Director", "Auditor"))
-        match = re.search(r"(?im)^ROLES:\\s*(.+)$", director["text"])
+        match = re.search(r"(?im)^ROLES:\s*(.+)$", director["text"])
         selected = []
         if match:
             selected = [r for r in allowed if r.lower() in match.group(1).lower()][:2]
