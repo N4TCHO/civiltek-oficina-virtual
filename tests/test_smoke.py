@@ -30,6 +30,16 @@ if True:
                 self.assertTrue(login.json()["ok"])
                 self.assertEqual(client.get("/api/auth/status").json()["authenticated"], True)
                 self.assertEqual(client.get("/api/records").status_code, 200)
+                agents=client.get("/api/office/agents")
+                self.assertEqual(agents.status_code,200)
+                names=[a["name"] for a in agents.json()["agents"]]
+                self.assertIn("Director",names)
+                self.assertIn("Auditor",names)
+                self.assertIn("Topografía y GIS",names)
+                self.assertGreaterEqual(len(names),14)
+                deliveries=client.get("/api/office/deliveries")
+                self.assertEqual(deliveries.status_code,200)
+                self.assertIsInstance(deliveries.json()["items"],list)
 
         def test_apu_pricing_and_excel(self):
             data={"code":"302-1","description":"Base granular","unit":"m3",
