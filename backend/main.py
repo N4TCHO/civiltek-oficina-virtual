@@ -578,6 +578,10 @@ def calcular_estado_pago(data: EstadoPago):
 def descargar_estado_pago(data: EstadoPago):
     return excel_ep(data)
 
+@app.get("/centro-mando")
+def centro_mando_page():
+    return FileResponse(ROOT / "centro-mando.html")
+
 @app.get("/apu")
 def apu_page():
     return FileResponse(ROOT / "apu.html")
