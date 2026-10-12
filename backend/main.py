@@ -26,13 +26,20 @@ LOCK = threading.RLock()
 app = FastAPI(title="Civiltek API", version="0.4.0", docs_url=None, redoc_url=None, openapi_url=None)
 
 ROLES = {
-    "Director": "Coordina tareas, define prioridades y revisa entregables.",
-    "Licitaciones": "Analiza antecedentes y requisitos de licitaciones chilenas.",
-    "Presupuestos": "Analiza APU, cantidades, costos y supuestos.",
-    "Calidad MOP": "Revisa protocolos y control de calidad de obras MOP.",
-    "Documental": "Prepara borradores de cartas y registros.",
-    "Comercial": "Prepara propuestas de servicios y comunicaciones.",
-    "Auditor": "Identifica inconsistencias, riesgos y datos faltantes.",
+    "Director": "Coordina equipos multidisciplinarios, define alcance, prioridades y entregables.",
+    "Licitaciones": "Analiza bases, requisitos de admisibilidad y propuestas de licitaciones chilenas.",
+    "Presupuestos": "Elabora análisis de precios unitarios, cubicaciones y presupuestos verificables.",
+    "Calidad MOP": "Desarrolla planes de calidad, protocolos, matrices y auditorías para contratos MOP.",
+    "Documental": "Estructura expedientes, cartas, registros, procedimientos y anexos.",
+    "Comercial": "Desarrolla ofertas de servicios, propuestas y comunicaciones comerciales.",
+    "Auditor": "Revisa trazabilidad, coherencia, riesgos y evidencia de los entregables.",
+    "Legal y Contratos": "Analiza contratos, controversias, obligaciones y normativa chilena; no sustituye asesoría ni patrocinio de abogado habilitado.",
+    "Prevención de Riesgos": "Prepara matrices IPER, procedimientos seguros, planes de emergencia y programas preventivos sujetos a validación profesional.",
+    "Medio Ambiente": "Prepara planes de manejo ambiental, matrices de aspectos e impactos, residuos y seguimiento de compromisos, sujetos a validación.",
+    "Ingeniería y Obras": "Desarrolla memorias, especificaciones, cubicaciones y revisión técnica de proyectos; no certifica ni firma diseños.",
+    "Finanzas": "Evalúa costos, flujo de caja, estados de pago y escenarios financieros.",
+    "Topografía y GIS": "Revisa antecedentes topográficos, georreferenciación, cubicaciones y entregables cartográficos.",
+    "Recursos Humanos": "Prepara políticas, procedimientos y documentación laboral con revisión normativa."
 }
 
 def utcnow():
@@ -272,13 +279,13 @@ async def execute_office(request: OfficeRequest):
         director = await _ask_provider(
             client, "Director",
             "Clasifica el encargo y redacta un plan breve. Elige hasta DOS especialistas "
-            "de esta lista: Licitaciones, Presupuestos, Calidad MOP, Documental, Comercial. "
+            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". ""
             "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "
             "y después PLAN: y el plan. No uses otros roles.",
             "Proyecto: " + request.project + "\\nObjetivo: " + request.objective
             + "\\n" + request.context)
         import re
-        allowed = ("Licitaciones", "Presupuestos", "Calidad MOP", "Documental", "Comercial")
+        allowed = tuple(role for role in ROLES if role not in ("Director", "Auditor"))
         match = re.search(r"(?im)^ROLES:\\s*(.+)$", director["text"])
         selected = []
         if match:
