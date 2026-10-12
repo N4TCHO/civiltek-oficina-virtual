@@ -222,6 +222,127 @@ async def run_agent(task: TaskIn):
         raise HTTPException(502, "No fue posible obtener respuesta de OpenRouter. Comprueba disponibilidad del proveedor.") from exc
     return {"role": task.role, "model": selected_model, "draft": answer, "requires_human_review": True}
 
+class OfficeRequest(BaseModel):
+    objective: str = Field(min_length=12, max_length=8000)
+    project: str = Field(default="Civiltek", max_length=200)
+    context: str = Field(default="", max_length=16000)
+
+def _agent_system(role: str) -> str:
+    return ("Eres el agente " + role + " de Civiltek, consultora chilena de construcción. "
+            + ROLES[role] + " Trabaja en español profesional. "
+            "No inventes datos, precios, normas, numerales MOP, documentos, ensayos ni leyes. "
+            "Separa antecedentes verificados, supuestos, vacíos y propuestas. "
+            "Todo entregable debe revisarse por un profesional antes de uso oficial.")
+
+async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, context: str) -> dict:
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    if not api_key:
+        raise HTTPException(503, "Configura OPENROUTER_API_KEY en Railway.")
+    model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+    messages = [{"role": "system", "content": _agent_system(role)},
+                {"role": "user", "content": instruction + "\\n\\nANTECEDENTES:\\n" + context}]
+    payload = {"model": model, "messages": messages, "max_tokens": 1250, "temperature": 0.2}
+    headers = {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}
+    for attempt in range(2):
+        try:
+            response = await client.post("https://openrouter.ai/api/v1/chat/completions",
+                                         json=payload, headers=headers)
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, "No fue posible contactar OpenRouter.") from exc
+        if response.status_code == 402 and model != "openrouter/free" and attempt == 0:
+            model = "openrouter/free"
+            payload["model"] = model
+            continue
+        if response.is_error:
+            raise HTTPException(502, "OpenRouter rechazó la solicitud (HTTP "
+                                + str(response.status_code) + ").")
+        try:
+            content = response.json()["choices"][0]["message"]["content"]
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError("Respuesta vacía")
+            return {"role": role, "model": model, "text": content}
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            raise HTTPException(502, "El modelo no entregó texto válido.") from exc
+    raise HTTPException(502, "No fue posible usar el modelo.")
+
+@app.post("/api/office/execute", dependencies=[Depends(authorize)])
+async def execute_office(request: OfficeRequest):
+    """Director plans, specialists draft, auditor checks; save the expediente."""
+    with httpx.AsyncClient(timeout=90) as client:
+        director = await _ask_provider(
+            client, "Director",
+            "Clasifica el encargo y redacta un plan breve. Elige hasta DOS especialistas "
+            "de esta lista: Licitaciones, Presupuestos, Calidad MOP, Documental, Comercial. "
+            "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "
+            "y después PLAN: y el plan. No uses otros roles.",
+            "Proyecto: " + request.project + "\\nObjetivo: " + request.objective
+            + "\\n" + request.context)
+        import re
+        allowed = ("Licitaciones", "Presupuestos", "Calidad MOP", "Documental", "Comercial")
+        match = re.search(r"(?im)^ROLES:\\s*(.+)$", director["text"])
+        selected = []
+        if match:
+            selected = [r for r in allowed if r.lower() in match.group(1).lower()][:2]
+        if not selected:
+            selected = ["Documental"]
+        outputs = []
+        for role in selected:
+            output = await _ask_provider(
+                client, role,
+                "Realiza TU parte del encargo y produce un entregable útil, concreto y "
+                "estructurado. No digas que ejecutaste acciones externas. "
+                "Si faltan documentos, deja pendientes específicos.",
+                "Proyecto: " + request.project + "\\nObjetivo: " + request.objective
+                + "\\nAntecedentes: " + request.context
+                + "\\nPlan del director: " + director["text"][:2500])
+            outputs.append(output)
+        auditor = await _ask_provider(
+            client, "Auditor",
+            "Audita los entregables: detecta afirmaciones no verificadas, riesgos, "
+            "errores, datos faltantes y condiciones de aprobación. "
+            "Emite un dictamen BORRADOR REQUIERE REVISION HUMANA.",
+            "Objetivo: " + request.objective + "\\n"
+            + "\\n".join(x["role"] + ": " + x["text"][:5000] for x in outputs))
+    now = utcnow()
+    item_id = str(uuid.uuid4())
+    result = {"id": item_id, "project": request.project, "objective": request.objective,
+              "director": director, "specialists": outputs, "auditor": auditor,
+              "status": "Revisión humana pendiente", "created_at": now}
+    with connect() as db:
+        db.execute("INSERT INTO records VALUES(?,?,?,?,?,?)",
+                   (item_id, "task", request.objective[:200],
+                    json.dumps(result, ensure_ascii=False), now, now))
+    return result
+
+@app.get("/api/office/{item_id}/docx", dependencies=[Depends(authorize)])
+def office_docx(item_id: str):
+    with connect() as db:
+        row = db.execute("SELECT payload FROM records WHERE id=? AND kind='task'",
+                         (item_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Expediente no encontrado.")
+    result = json.loads(row["payload"])
+    if "director" not in result:
+        raise HTTPException(422, "Este registro no es un expediente de oficina.")
+    doc = Document()
+    doc.add_heading("CIVILTEK | Expediente de trabajo", 0)
+    doc.add_paragraph("Proyecto: " + result["project"])
+    doc.add_paragraph("Encargo: " + result["objective"])
+    doc.add_paragraph("Estado: REQUIERE REVISIÓN HUMANA")
+    for title, body in [("Director | Plan", result["director"]["text"])] + [
+        (x["role"] + " | Entregable", x["text"]) for x in result["specialists"]
+    ] + [("Auditor | Observaciones", result["auditor"]["text"])]:
+        doc.add_heading(title, level=1)
+        for line in body.split("\\n"):
+            doc.add_paragraph(line)
+    stream = io.BytesIO()
+    doc.save(stream)
+    stream.seek(0)
+    return StreamingResponse(stream,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": 'attachment; filename="civiltek-expediente.docx"'})
+
+
 class LetterIn(BaseModel):
     number: str = Field(max_length=50)
     date: str = Field(max_length=30)
