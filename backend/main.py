@@ -414,6 +414,31 @@ async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, 
             raise HTTPException(502, "El modelo no entregó texto válido.") from exc
     raise HTTPException(502, "No fue posible usar el modelo.")
 
+@app.get("/api/office/agents", dependencies=[Depends(authorize)])
+def office_agent_directory():
+    """Real available role definitions; readiness is not a background-running claim."""
+    return {"agents":[{"name":name,"description":description,
+                        "category":"Dirección" if name=="Director" else
+                                   "Control" if name=="Auditor" else "Especialista"}
+                       for name,description in ROLES.items()],
+            "provider_configured":bool(os.getenv("OPENROUTER_API_KEY"))}
+
+@app.get("/api/office/deliveries", dependencies=[Depends(authorize)])
+def office_deliveries():
+    with connect() as db:
+        rows=db.execute("SELECT id,title,payload,created_at,updated_at FROM records WHERE kind='task' ORDER BY updated_at DESC LIMIT 40").fetchall()
+    items=[]
+    for row in rows:
+        try:
+            data=json.loads(row["payload"])
+        except (ValueError,TypeError):
+            continue
+        items.append({"id":row["id"],"title":row["title"],
+                      "project":data.get("project",""),"status":data.get("status","Sin estado"),
+                      "specialists":[x.get("role","") for x in data.get("specialists",[])],
+                      "created_at":row["created_at"],"updated_at":row["updated_at"]})
+    return {"items":items}
+
 @app.post("/api/office/execute", dependencies=[Depends(authorize)])
 async def execute_office(request: OfficeRequest):
     """Director plans, specialists draft, auditor checks; save the expediente."""
