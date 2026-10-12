@@ -181,8 +181,7 @@ async def run_agent(task: TaskIn):
         {"role": "system", "content": system},
         {"role": "user", "content": task.instructions + ("\n\nAntecedentes:\n" + task.context if task.context else "")}
     ], "temperature": 0.2, "max_tokens": 1800}
-    # OpenRouter's free router selects an available free model. A paid model with
-    # insufficient credits gets one automatic retry using that router.
+    # OpenRouter's free router selects an available free model. A paid model with\n    # insufficient credits gets one automatic retry using that router.
     free_router = "openrouter/free"\n    selected_model = model
     try:
         async with httpx.AsyncClient(timeout=75) as client:
