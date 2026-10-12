@@ -74,6 +74,19 @@ if True:
                 self.assertTrue(exported.content.startswith(b"PK"))
                 listed=client.get("/api/licitaciones/expedientes")
                 self.assertTrue(any(x["id"]==ident for x in listed.json()))
+                async def fake_provider(client,role,instruction,context):
+                    if role=="Director":
+                        content="ROLES: Licitaciones, Presupuestos\\nPLAN: analizar bases"
+                    elif role=="Auditor":
+                        content="BORRADOR REQUIERE REVISION HUMANA"
+                    else:
+                        content="Revisión preliminar: "+role
+                    return {"role":role,"model":"mock-test","text":content}
+                with patch("backend.main._ask_provider",new=fake_provider):
+                    study=client.post("/api/licitaciones/expedientes/"+ident+"/ejecutar")
+                self.assertEqual(study.status_code,200,study.text)
+                self.assertEqual(study.json()["project"],"Licitación de prueba vial")
+                self.assertEqual(len(study.json()["specialists"]),2)
 
         def test_operations_audit_and_approval_gates(self):
             with TestClient(app,base_url="https://testserver",headers={"Origin":"https://testserver"}) as client:
