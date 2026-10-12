@@ -12,7 +12,7 @@ if True:
 
     class SmokeTests(unittest.TestCase):
         def test_health_and_pages(self):
-            with TestClient(app, base_url="https://testserver") as client:
+            with TestClient(app, base_url="https://testserver", headers={"Origin":"https://testserver"}) as client:
                 response = client.get("/api/health")
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(response.json()["ok"])
@@ -21,7 +21,7 @@ if True:
                         self.assertEqual(client.get(route).status_code, 200)
 
         def test_login_and_protected_records(self):
-            with TestClient(app, base_url="https://testserver") as client:
+            with TestClient(app, base_url="https://testserver", headers={"Origin":"https://testserver"}) as client:
                 self.assertEqual(client.get("/api/records").status_code, 401)
                 self.assertEqual(client.post("/api/auth/login", json={"password": "wrong"}).status_code, 401)
                 login = client.post("/api/auth/login", json={"password": os.environ["CIVILTEK_ADMIN_TOKEN"]})
@@ -35,7 +35,7 @@ if True:
                 {"codigo":"101","descripcion":"Partida de prueba","unidad":"m3",
                  "cantidad_contrato":"100","precio_unitario":"5000",
                  "acumulado_anterior":"20","cantidad_periodo":"30"}]}
-            with TestClient(app, base_url="https://testserver") as client:
+            with TestClient(app, base_url="https://testserver", headers={"Origin":"https://testserver"}) as client:
                 client.post("/api/auth/login", json={"password":os.environ["CIVILTEK_ADMIN_TOKEN"]})
                 result = client.post("/api/estados-pago/calcular",json=data)
                 self.assertEqual(result.status_code,200,result.text)
