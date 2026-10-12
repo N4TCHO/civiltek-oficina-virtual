@@ -16,7 +16,7 @@ if True:
                 response = client.get("/api/health")
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(response.json()["ok"])
-                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes"):
+                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes", "/civiltek-ui.css"):
                     with self.subTest(route=route):
                         self.assertEqual(client.get(route).status_code, 200)
 
