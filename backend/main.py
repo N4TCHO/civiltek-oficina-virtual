@@ -536,3 +536,7 @@ def office_page():
 @app.get("/clientes")
 def clients_page():
     return FileResponse(ROOT / "clientes.html")
+
+@app.get("/oportunidades")
+def opportunities_page():
+    return FileResponse(ROOT / "oportunidades.html")
