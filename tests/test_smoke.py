@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -29,6 +30,29 @@ if True:
                 self.assertTrue(login.json()["ok"])
                 self.assertEqual(client.get("/api/auth/status").json()["authenticated"], True)
                 self.assertEqual(client.get("/api/records").status_code, 200)
+
+        def test_agent_workflow_with_mock_provider(self):
+            async def mock_provider(client, role, instruction, context):
+                if role == "Director":
+                    content = "ROLES: Calidad MOP, Presupuestos\\nPLAN: revisar antecedentes"
+                elif role == "Auditor":
+                    content = "BORRADOR REQUIERE REVISION HUMANA: verificar respaldo"
+                else:
+                    content = "Entregable de prueba para " + role
+                return {"role":role,"model":"mock-test","text":content}
+            with TestClient(app, base_url="https://testserver", headers={"Origin":"https://testserver"}) as client:
+                client.post("/api/auth/login",json={"password":os.environ["CIVILTEK_ADMIN_TOKEN"]})
+                with patch("backend.main._ask_provider",new=mock_provider):
+                    response=client.post("/api/office/execute",json={
+                        "objective":"Revisar documentación de control de calidad de obra",
+                        "project":"Proyecto de prueba"})
+                self.assertEqual(response.status_code,200,response.text)
+                data=response.json()
+                self.assertEqual(len(data["specialists"]),2)
+                self.assertEqual(data["status"],"Revisión humana pendiente")
+                doc=client.get("/api/office/"+data["id"]+"/docx")
+                self.assertEqual(doc.status_code,200,doc.text)
+                self.assertTrue(doc.content.startswith(b"PK"))
 
         def test_payment_calculation_and_export(self):
             data = {"contrato":"Contrato de prueba","numero":"1","items":[
