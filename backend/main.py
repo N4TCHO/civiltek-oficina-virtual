@@ -234,7 +234,8 @@ async def run_agent(task: TaskIn):
 class OpportunityScanIn(BaseModel):
     terms: list[str] = Field(default_factory=lambda: [
         "asesoría", "prevención de riesgos", "medio ambiente", "auditoría",
-        "ingeniería", "topografía", "conservación vial", "consultoría"\n    ], max_length=20)
+        "ingeniería", "topografía", "conservación vial", "consultoría"
+    ], max_length=20)
 
 @app.get("/api/integrations/status", dependencies=[Depends(authorize)])
 def integration_status():
@@ -372,7 +373,8 @@ class OfficeRequest(BaseModel):
     context: str = Field(default="", max_length=16000)
 
 def _agent_system(role: str) -> str:
-    return ("Eres el agente " + role + " de Civiltek, consultora chilena de construcción. "\n            + ROLES[role] + " Trabaja en español profesional. "\n            "No inventes datos, precios, normas, numerales MOP, documentos, ensayos ni leyes. "\n            "Separa antecedentes verificados, supuestos, vacíos y propuestas. "\n            "Todo entregable debe revisarse por un profesional antes de uso oficial.")
+    return ("Eres el agente " + role + " de Civiltek, consultora chilena de construcción. "
+            + ROLES[role] + " Trabaja en español profesional. "\n            "No inventes datos, precios, normas, numerales MOP, documentos, ensayos ni leyes. "\n            "Separa antecedentes verificados, supuestos, vacíos y propuestas. "\n            "Todo entregable debe revisarse por un profesional antes de uso oficial.")
 
 async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, context: str) -> dict:
     api_key = os.getenv("OPENROUTER_API_KEY", "")
@@ -394,7 +396,8 @@ async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, 
             payload["model"] = model
             continue
         if response.is_error:
-            raise HTTPException(502, "OpenRouter rechazó la solicitud (HTTP "\n                                + str(response.status_code) + ").")
+            raise HTTPException(502, "OpenRouter rechazó la solicitud (HTTP "
+                                + str(response.status_code) + ").")
         try:
             content = response.json()["choices"][0]["message"]["content"]
             if not isinstance(content, str) or not content.strip():
@@ -410,7 +413,9 @@ async def execute_office(request: OfficeRequest):
     with httpx.AsyncClient(timeout=90) as client:
         director = await _ask_provider(
             client, "Director",
-            "Clasifica el encargo y redacta un plan breve. Elige hasta DOS especialistas "\n            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". "\n            "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "\n            "y después PLAN: y el plan. No uses otros roles.",
+            "Clasifica el encargo y redacta un plan breve. Elige hasta DOS especialistas "
+            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". "\n            "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "
+            "y después PLAN: y el plan. No uses otros roles.",
             "Proyecto: " + request.project + "\nObjetivo: " + request.objective
             + "\n" + request.context)
         import re
@@ -425,15 +430,19 @@ async def execute_office(request: OfficeRequest):
         for role in selected:
             output = await _ask_provider(
                 client, role,
-                "Realiza TU parte del encargo y produce un entregable útil, concreto y "\n                "estructurado. No digas que ejecutaste acciones externas. "\n                "Si faltan documentos, deja pendientes específicos.",
+                "Realiza TU parte del encargo y produce un entregable útil, concreto y "
+                "estructurado. No digas que ejecutaste acciones externas. "
+                "Si faltan documentos, deja pendientes específicos.",
                 "Proyecto: " + request.project + "\nObjetivo: " + request.objective
                 + "\nAntecedentes: " + request.context
                 + "\nPlan del director: " + director["text"][:2500])
             outputs.append(output)
         auditor = await _ask_provider(
             client, "Auditor",
-            "Audita los entregables: detecta afirmaciones no verificadas, riesgos, "\n            "errores, datos faltantes y condiciones de aprobación. "\n            "Emite un dictamen BORRADOR REQUIERE REVISION HUMANA.",
-            "Objetivo: " + request.objective + "\n"\n            + "\n".join(x["role"] + ": " + x["text"][:5000] for x in outputs))
+            "Audita los entregables: detecta afirmaciones no verificadas, riesgos, "
+            "errores, datos faltantes y condiciones de aprobación. "\n            "Emite un dictamen BORRADOR REQUIERE REVISION HUMANA.",
+            "Objetivo: " + request.objective + "\n"
+            + "\n".join(x["role"] + ": " + x["text"][:5000] for x in outputs))
     now = utcnow()
     item_id = str(uuid.uuid4())
     result = {"id": item_id, "project": request.project, "objective": request.objective,
@@ -578,7 +587,8 @@ def dashboard_page():
     return FileResponse(ROOT / "panel.html")
 
 # Documents are kept outside the public web root, in the same persistent volume as SQLite.
-UPLOAD_DIR = DB_PATH.parent / "attachments"\nALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".txt", ".png", ".jpg", ".jpeg"}
+UPLOAD_DIR = DB_PATH.parent / "attachments"
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".txt", ".png", ".jpg", ".jpeg"}
 MAX_ATTACHMENT_BYTES = 12 * 1024 * 1024
 
 @app.post("/api/client-requests/{request_id}/attachments", dependencies=[Depends(authorize)])
