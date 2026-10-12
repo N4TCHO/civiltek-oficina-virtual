@@ -357,7 +357,7 @@ async def dispatch_client_request(request_id: str):
     result = await execute_office(OfficeRequest(
         objective=payload["service"] + ": " + payload["objective"],
         project=payload["client_name"],
-        context=payload.get("context", "") + "\\nPlazo indicado: " + payload.get("deadline", "")))
+        context=payload.get("context", "") + "\nPlazo indicado: " + payload.get("deadline", "")))
     with connect() as db:
         latest = db.execute("SELECT payload FROM records WHERE id=? AND kind='client_request'", (request_id,)).fetchone()
         latest_payload = json.loads(latest["payload"])
