@@ -1,5 +1,4 @@
-"""Civiltek API: single-admin MVP. Configure a private persistent volume before production."""
-import hmac
+"""Civiltek API: single-admin MVP. Configure a private persistent volume before production."""\nimport hmac
 import hashlib
 import base64
 import time
@@ -39,8 +38,7 @@ ROLES = {
     "Ingeniería y Obras": "Desarrolla memorias, especificaciones, cubicaciones y revisión técnica de proyectos; no certifica ni firma diseños.",
     "Finanzas": "Evalúa costos, flujo de caja, estados de pago y escenarios financieros.",
     "Topografía y GIS": "Revisa antecedentes topográficos, georreferenciación, cubicaciones y entregables cartográficos.",
-    "Recursos Humanos": "Prepara políticas, procedimientos y documentación laboral con revisión normativa."
-}
+    "Recursos Humanos": "Prepara políticas, procedimientos y documentación laboral con revisión normativa."\n}
 
 def utcnow():
     return datetime.now(timezone.utc).isoformat()
@@ -67,8 +65,7 @@ def setup():
         db.execute("""CREATE INDEX IF NOT EXISTS idx_records_kind ON records(kind)""")
 
 SESSION_SECONDS = 7 * 24 * 60 * 60
-COOKIE_NAME = "civiltek_session"
-
+COOKIE_NAME = "civiltek_session"\n
 def _signature(value: str) -> str:
     digest = hmac.new(TOKEN.encode(), value.encode(), hashlib.sha256).digest()
     return base64.urlsafe_b64encode(digest).decode().rstrip("=")
@@ -107,8 +104,7 @@ def login(data: LoginIn, response: Response):
     stamp = str(int(time.time()))
     response.set_cookie(COOKIE_NAME, stamp + "." + _signature(stamp),
         max_age=SESSION_SECONDS, httponly=True, secure=True, samesite="lax", path="/")
-    response.headers["Cache-Control"] = "no-store"
-    return {"ok": True, "expires_in_days": 7}
+    response.headers["Cache-Control"] = "no-store"\n    return {"ok": True, "expires_in_days": 7}
 
 @app.post("/api/auth/logout")
 def logout(response: Response):
@@ -180,18 +176,14 @@ async def run_agent(task: TaskIn):
         raise HTTPException(503, "OPENROUTER_API_KEY is not configured")
     model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     system = ("Eres un especialista de la consultora Civiltek, Chile. " + ROLES[task.role] +
-        " Responde en español chileno profesional. No inventes leyes, valores de mercado, "
-        "normas MOP, documentos ni resultados de ensayos. Identifica los datos faltantes, "
-        "explicita supuestos y exige revisión humana antes de presentar documentos oficiales. "
-        "No ejecutes acciones externas ni afirmes que las ejecutaste.")
+        " Responde en español chileno profesional. No inventes leyes, valores de mercado, "\n        "normas MOP, documentos ni resultados de ensayos. Identifica los datos faltantes, "\n        "explicita supuestos y exige revisión humana antes de presentar documentos oficiales. "\n        "No ejecutes acciones externas ni afirmes que las ejecutaste.")
     payload = {"model": model, "messages": [
         {"role": "system", "content": system},
         {"role": "user", "content": task.instructions + ("\n\nAntecedentes:\n" + task.context if task.context else "")}
     ], "temperature": 0.2, "max_tokens": 1800}
     # OpenRouter's free router selects an available free model. A paid model with
     # insufficient credits gets one automatic retry using that router.
-    free_router = "openrouter/free"
-    selected_model = model
+    free_router = "openrouter/free"\n    selected_model = model
     try:
         async with httpx.AsyncClient(timeout=75) as client:
             response = await client.post(
@@ -211,16 +203,11 @@ async def run_agent(task: TaskIn):
                 # Never return provider bodies: they can contain sensitive request data.
                 status = response.status_code
                 if status == 401 or status == 403:
-                    detail = "OpenRouter rechazó la API Key o sus permisos (HTTP " + str(status) + ")."
-                elif status == 402:
-                    detail = "OpenRouter indica saldo insuficiente incluso para esta solicitud (HTTP 402)."
-                elif status == 429:
-                    detail = "Límite de solicitudes de OpenRouter alcanzado (HTTP 429). Intenta más tarde."
-                elif status == 404:
-                    detail = "Modelo de OpenRouter no disponible (HTTP 404)."
-                else:
-                    detail = "OpenRouter devolvió HTTP " + str(status) + "."
-                raise HTTPException(502, detail)
+                    detail = "OpenRouter rechazó la API Key o sus permisos (HTTP " + str(status) + ")."\n                elif status == 402:
+                    detail = "OpenRouter indica saldo insuficiente incluso para esta solicitud (HTTP 402)."\n                elif status == 429:
+                    detail = "Límite de solicitudes de OpenRouter alcanzado (HTTP 429). Intenta más tarde."\n                elif status == 404:
+                    detail = "Modelo de OpenRouter no disponible (HTTP 404)."\n                else:
+                    detail = "OpenRouter devolvió HTTP " + str(status) + "."\n                raise HTTPException(502, detail)
             data = response.json()
             answer = data["choices"][0]["message"]["content"]
             if not isinstance(answer, str) or not answer.strip():
@@ -234,8 +221,7 @@ async def run_agent(task: TaskIn):
 class OpportunityScanIn(BaseModel):
     terms: list[str] = Field(default_factory=lambda: [
         "asesoría", "prevención de riesgos", "medio ambiente", "auditoría",
-        "ingeniería", "topografía", "conservación vial", "consultoría"
-    ], max_length=20)
+        "ingeniería", "topografía", "conservación vial", "consultoría"\n    ], max_length=20)
 
 @app.get("/api/integrations/status", dependencies=[Depends(authorize)])
 def integration_status():
@@ -253,8 +239,7 @@ async def scan_opportunities(scan: OpportunityScanIn):
     terms = [term.strip().lower() for term in scan.terms if 2 <= len(term.strip()) <= 100]
     if not terms:
         raise HTTPException(422, "Indica al menos una palabra clave válida.")
-    url = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"
-    try:
+    url = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"\n    try:
         async with httpx.AsyncClient(timeout=35) as client:
             response = await client.get(url, params={"estado": "activas", "ticket": ticket})
             response.raise_for_status()
@@ -373,11 +358,7 @@ class OfficeRequest(BaseModel):
     context: str = Field(default="", max_length=16000)
 
 def _agent_system(role: str) -> str:
-    return ("Eres el agente " + role + " de Civiltek, consultora chilena de construcción. "
-            + ROLES[role] + " Trabaja en español profesional. "
-            "No inventes datos, precios, normas, numerales MOP, documentos, ensayos ni leyes. "
-            "Separa antecedentes verificados, supuestos, vacíos y propuestas. "
-            "Todo entregable debe revisarse por un profesional antes de uso oficial.")
+    return ("Eres el agente " + role + " de Civiltek, consultora chilena de construcción. "\n            + ROLES[role] + " Trabaja en español profesional. "\n            "No inventes datos, precios, normas, numerales MOP, documentos, ensayos ni leyes. "\n            "Separa antecedentes verificados, supuestos, vacíos y propuestas. "\n            "Todo entregable debe revisarse por un profesional antes de uso oficial.")
 
 async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, context: str) -> dict:
     api_key = os.getenv("OPENROUTER_API_KEY", "")
@@ -395,12 +376,10 @@ async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, 
         except httpx.HTTPError as exc:
             raise HTTPException(502, "No fue posible contactar OpenRouter.") from exc
         if response.status_code == 402 and model != "openrouter/free" and attempt == 0:
-            model = "openrouter/free"
-            payload["model"] = model
+            model = "openrouter/free"\n            payload["model"] = model
             continue
         if response.is_error:
-            raise HTTPException(502, "OpenRouter rechazó la solicitud (HTTP "
-                                + str(response.status_code) + ").")
+            raise HTTPException(502, "OpenRouter rechazó la solicitud (HTTP "\n                                + str(response.status_code) + ").")
         try:
             content = response.json()["choices"][0]["message"]["content"]
             if not isinstance(content, str) or not content.strip():
@@ -412,14 +391,10 @@ async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, 
 
 @app.post("/api/office/execute", dependencies=[Depends(authorize)])
 async def execute_office(request: OfficeRequest):
-    """Director plans, specialists draft, auditor checks; save the expediente."""
-    with httpx.AsyncClient(timeout=90) as client:
+    """Director plans, specialists draft, auditor checks; save the expediente."""\n    with httpx.AsyncClient(timeout=90) as client:
         director = await _ask_provider(
             client, "Director",
-            "Clasifica el encargo y redacta un plan breve. Elige hasta DOS especialistas "
-            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". "
-            "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "
-            "y después PLAN: y el plan. No uses otros roles.",
+            "Clasifica el encargo y redacta un plan breve. Elige hasta DOS especialistas "\n            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". "\n            "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "\n            "y después PLAN: y el plan. No uses otros roles.",
             "Proyecto: " + request.project + "\nObjetivo: " + request.objective
             + "\n" + request.context)
         import re
@@ -434,20 +409,15 @@ async def execute_office(request: OfficeRequest):
         for role in selected:
             output = await _ask_provider(
                 client, role,
-                "Realiza TU parte del encargo y produce un entregable útil, concreto y "
-                "estructurado. No digas que ejecutaste acciones externas. "
-                "Si faltan documentos, deja pendientes específicos.",
+                "Realiza TU parte del encargo y produce un entregable útil, concreto y "\n                "estructurado. No digas que ejecutaste acciones externas. "\n                "Si faltan documentos, deja pendientes específicos.",
                 "Proyecto: " + request.project + "\nObjetivo: " + request.objective
                 + "\nAntecedentes: " + request.context
                 + "\nPlan del director: " + director["text"][:2500])
             outputs.append(output)
         auditor = await _ask_provider(
             client, "Auditor",
-            "Audita los entregables: detecta afirmaciones no verificadas, riesgos, "
-            "errores, datos faltantes y condiciones de aprobación. "
-            "Emite un dictamen BORRADOR REQUIERE REVISION HUMANA.",
-            "Objetivo: " + request.objective + "\n"
-            + "\n".join(x["role"] + ": " + x["text"][:5000] for x in outputs))
+            "Audita los entregables: detecta afirmaciones no verificadas, riesgos, "\n            "errores, datos faltantes y condiciones de aprobación. "\n            "Emite un dictamen BORRADOR REQUIERE REVISION HUMANA.",
+            "Objetivo: " + request.objective + "\n"\n            + "\n".join(x["role"] + ": " + x["text"][:5000] for x in outputs))
     now = utcnow()
     item_id = str(uuid.uuid4())
     result = {"id": item_id, "project": request.project, "objective": request.objective,
@@ -579,8 +549,7 @@ def review_client_request(request_id: str, decision: ReviewDecision):
         payload = json.loads(row["payload"])
         if payload.get("status") != "Revisión humana pendiente" or not payload.get("office_id"):
             raise HTTPException(409, "No hay expediente pendiente de revisión")
-        payload["status"] = "Aprobado" if decision.decision == "approve" else "Requiere correcciones"
-        payload["review_notes"] = decision.notes
+        payload["status"] = "Aprobado" if decision.decision == "approve" else "Requiere correcciones"\n        payload["review_notes"] = decision.notes
         payload["reviewed_at"] = utcnow()
         db.execute("UPDATE records SET payload=?, updated_at=? WHERE id=?",
                    (json.dumps(payload, ensure_ascii=False), utcnow(), request_id))
@@ -592,8 +561,7 @@ def dashboard_page():
     return FileResponse(ROOT / "panel.html")
 
 # Documents are kept outside the public web root, in the same persistent volume as SQLite.
-UPLOAD_DIR = DB_PATH.parent / "attachments"
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".txt", ".png", ".jpg", ".jpeg"}
+UPLOAD_DIR = DB_PATH.parent / "attachments"\nALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".csv", ".txt", ".png", ".jpg", ".jpeg"}
 MAX_ATTACHMENT_BYTES = 12 * 1024 * 1024
 
 @app.post("/api/client-requests/{request_id}/attachments", dependencies=[Depends(authorize)])
