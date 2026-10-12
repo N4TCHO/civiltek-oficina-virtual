@@ -83,7 +83,7 @@ def authorize(request: Request, authorization: str | None = Header(default=None)
     if _valid_session(request.cookies.get(COOKIE_NAME)):
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("origin", "")
-            if origin != str(request.base_url).rstrip("/"):
+            if origin != "https://" + request.headers.get("host", "") and origin != "http://" + request.headers.get("host", ""):
                 raise HTTPException(403, "Origen de solicitud no permitido.")
         return
     raise HTTPException(401, "Inicia sesión para continuar.")
