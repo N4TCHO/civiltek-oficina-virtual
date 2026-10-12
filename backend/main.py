@@ -16,6 +16,7 @@ from pathlib import Path
 import httpx
 from docx import Document
 from backend.estados_pago import EstadoPago, calcular, totales, excel_ep, importar_excel
+from backend.operations import configure as configure_operations
 from fastapi import FastAPI, Depends, Header, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -707,3 +708,5 @@ def download_attachment(request_id: str, attachment_id: str):
     return FileResponse(path, filename=payload["filename"],
                         media_type="application/octet-stream",
                         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+app.include_router(configure_operations(connect, utcnow), dependencies=[Depends(authorize)])
