@@ -1,13 +1,15 @@
 """Tender dossier intake: deterministic document extraction, never invent base requirements."""
 import io
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from docx import Document
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 from pypdf import PdfReader
 
 router=APIRouter(prefix="/api/licitaciones",tags=["licitaciones"])
@@ -43,6 +45,36 @@ def extract(filename,raw):
     except Exception as exc:raise HTTPException(422,"No fue posible extraer texto del archivo") from exc
     if not text.strip():raise HTTPException(422,"No se detectó texto; un PDF escaneado requiere OCR")
     return text[:MAX_TEXT],len(text)>MAX_TEXT
+
+# Rules are explicit keyword-based triage, not legal interpretation or confirmed compliance.
+AREAS={
+ "Admisibilidad": ("admisibilidad","inadmisible","requisitos de participación"),
+ "Experiencia y registro": ("registro de contratistas","experiencia del oferente","experiencia acreditada"),
+ "Garantías": ("boleta de garantía","garantía de seriedad","garantía de fiel cumplimiento"),
+ "Plazos": ("plazo de ejecución","plazo contractual","días corridos"),
+ "Presupuesto y APU": ("análisis de precios unitarios","precio unitario","presupuesto detallado"),
+ "Plan de calidad": ("plan de calidad","plan de aseguramiento de calidad","autocontrol"),
+ "Prevención de riesgos": ("prevención de riesgos","seguridad y salud ocupacional"),
+ "Medio ambiente": ("plan de manejo ambiental","gestión ambiental","medio ambiente"),
+ "Programación": ("carta gantt","programación de obras","programa de trabajo"),
+ "Anexos y formularios": ("formularios de oferta","anexo administrativo","formulario de oferta"),
+}
+def evidence_matrix(payload):
+    result=[]
+    for area,keywords in AREAS.items():
+        matches=[]
+        for doc in payload["documents"]:
+            for line_no,line in enumerate(doc["text"].splitlines(),1):
+                lower=line.lower()
+                if any(re.search(r"(?<!\\w)"+re.escape(word)+r"(?!\\w)",lower) for word in keywords):
+                    snippet=line.strip()[:350]
+                    if snippet and len(matches)<8:
+                        matches.append({"filename":doc["filename"],"document_id":doc["id"],
+                                        "line":line_no,"excerpt":snippet})
+                if len(matches)>=8:break
+        result.append({"area":area,"status":"Mención detectada; requiere revisión" if matches else "Sin mención detectada; verificar manualmente",
+                       "evidence":matches})
+    return result
 
 def configure(connect,utcnow):
     @router.post("/expedientes")
@@ -83,9 +115,27 @@ def configure(connect,utcnow):
             row=db.execute("SELECT payload FROM records WHERE id=? AND kind='tender'",(ident,)).fetchone()
         if not row:raise HTTPException(404,"Expediente no encontrado")
         payload=json.loads(row["payload"])
-        sections=["Admisibilidad","Experiencia y registro","Garantías","Plazos","Presupuesto y APU",
-                  "Plan de calidad","Prevención de riesgos","Medio ambiente","Programación","Anexos y formularios"]
         return {"expediente":ident,"documents":len(payload["documents"]),
-                "checks":[{"area":s,"status":"Pendiente de revisión","source":None} for s in sections],
-                "warning":"Matriz inicial de verificación. No implica que estos requisitos figuren en las bases; deben comprobarse con cita de fuente."}
+                "checks":evidence_matrix(payload),
+                "warning":"Búsqueda de palabras clave, no determina requisitos ni cumplimiento. Verifica cada mención en el documento original."}
+    @router.get("/expedientes/{ident}/matriz.xlsx")
+    def matrix_excel(ident:str):
+        with connect() as db:
+            row=db.execute("SELECT payload FROM records WHERE id=? AND kind='tender'",(ident,)).fetchone()
+        if not row:raise HTTPException(404,"Expediente no encontrado")
+        payload=json.loads(row["payload"])
+        wb=Workbook();ws=wb.active;ws.title="Matriz revisión"
+        ws.append(["Área","Estado preliminar","Documento","Línea texto extraído","Extracto"])
+        for check in evidence_matrix(payload):
+            if not check["evidence"]:
+                ws.append([check["area"],check["status"],"","",""])
+            for ev in check["evidence"]:
+                ws.append([check["area"],check["status"],ev["filename"],ev["line"],ev["excerpt"]])
+        ws.freeze_panes="C2"
+        ws.auto_filter.ref=ws.dimensions
+        for col,width in {"A":28,"B":43,"C":35,"D":22,"E":90}.items():ws.column_dimensions[col].width=width
+        out=io.BytesIO();wb.save(out);out.seek(0)
+        return StreamingResponse(out,media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition":'attachment; filename="civiltek-matriz-licitacion.xlsx"'})
+
     return router
