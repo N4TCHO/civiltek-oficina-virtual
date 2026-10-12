@@ -17,7 +17,7 @@ if True:
                 response = client.get("/api/health")
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(response.json()["ok"])
-                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes", "/civiltek-ui.css", "/estados-pago", "/operaciones"):
+                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes", "/civiltek-ui.css", "/estados-pago", "/operaciones", "/estudio-licitaciones"):
                     with self.subTest(route=route):
                         self.assertEqual(client.get(route).status_code, 200)
 
@@ -30,6 +30,28 @@ if True:
                 self.assertTrue(login.json()["ok"])
                 self.assertEqual(client.get("/api/auth/status").json()["authenticated"], True)
                 self.assertEqual(client.get("/api/records").status_code, 200)
+
+        def test_tender_dossier_document_intake(self):
+            from io import BytesIO
+            from docx import Document
+            with TestClient(app,base_url="https://testserver",headers={"Origin":"https://testserver"}) as client:
+                client.post("/api/auth/login",json={"password":os.environ["CIVILTEK_ADMIN_TOKEN"]})
+                created=client.post("/api/licitaciones/expedientes",json={"name":"Licitación de prueba vial"})
+                self.assertEqual(created.status_code,200,created.text)
+                ident=created.json()["id"]
+                doc=Document();doc.add_paragraph("Bases técnicas de prueba y partida de pavimentación")
+                buffer=BytesIO();doc.save(buffer)
+                uploaded=client.post("/api/licitaciones/expedientes/"+ident+"/documentos",
+                    files={"file":("bases.docx",buffer.getvalue(),
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
+                self.assertEqual(uploaded.status_code,200,uploaded.text)
+                self.assertGreater(uploaded.json()["characters"],10)
+                matrix=client.get("/api/licitaciones/expedientes/"+ident+"/matriz")
+                self.assertEqual(matrix.status_code,200)
+                self.assertEqual(matrix.json()["documents"],1)
+                self.assertTrue(all(x["status"]=="Pendiente de revisión" for x in matrix.json()["checks"]))
+                listed=client.get("/api/licitaciones/expedientes")
+                self.assertTrue(any(x["id"]==ident for x in listed.json()))
 
         def test_operations_audit_and_approval_gates(self):
             with TestClient(app,base_url="https://testserver",headers={"Origin":"https://testserver"}) as client:
