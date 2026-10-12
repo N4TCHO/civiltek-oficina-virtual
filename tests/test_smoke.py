@@ -41,6 +41,20 @@ if True:
                 self.assertEqual(deliveries.status_code,200)
                 self.assertIsInstance(deliveries.json()["items"],list)
 
+        def test_persistent_office_job_approval(self):
+            with TestClient(app,base_url="https://testserver",headers={"Origin":"https://testserver"}) as client:
+                client.post("/api/auth/login",json={"password":os.environ["CIVILTEK_ADMIN_TOKEN"]})
+                job=client.post("/api/jobs",json={"project":"Prueba","objective":"Preparar informe técnico para revisión"})
+                self.assertEqual(job.status_code,200,job.text)
+                ident=job.json()["id"]
+                listed=client.get("/api/jobs")
+                self.assertTrue(any(x["id"]==ident for x in listed.json()["items"]))
+                detail=client.get("/api/jobs/"+ident)
+                self.assertEqual(detail.status_code,200)
+                self.assertIn(detail.json()["status"],("En cola","Trabajando","Error"))
+                self.assertEqual(client.post("/api/jobs/"+ident+"/decision",
+                    json={"approved":True,"note":"Revisado"}).status_code,409)
+
         def test_apu_pricing_and_excel(self):
             data={"code":"302-1","description":"Base granular","unit":"m3",
                 "resources":[{"name":"Árido","type":"Materiales","unit":"m3",
