@@ -4,7 +4,8 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-with tempfile.TemporaryDirectory() as _tmp:
+_tmp = tempfile.mkdtemp(prefix='civiltek-smoke-')
+if True:
     os.environ["CIVILTEK_DB_PATH"] = os.path.join(_tmp, "civiltek.db")
     os.environ["CIVILTEK_ADMIN_TOKEN"] = "civiltek-test-token-not-for-production-123456"
     from backend.main import app
