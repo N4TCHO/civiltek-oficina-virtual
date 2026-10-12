@@ -12,6 +12,19 @@ if True:
     from backend.main import app
 
     class SmokeTests(unittest.TestCase):
+        def test_isometric_office_and_mixed_provider_status(self):
+            with TestClient(app,base_url="https://testserver",headers={"Origin":"https://testserver"}) as client:
+                page=client.get("/oficina")
+                self.assertEqual(page.status_code,200)
+                self.assertIn('id="floor"',page.text)
+                self.assertIn('id="prompt"',page.text)
+                self.assertEqual(client.get("/oficina-isometrica.css").status_code,200)
+                client.post("/api/auth/login",json={"password":os.environ["CIVILTEK_ADMIN_TOKEN"]})
+                providers=client.get("/api/office/agents")
+                self.assertEqual(providers.status_code,200)
+                self.assertIn("claude",providers.json()["providers"])
+                self.assertIn("openrouter",providers.json()["providers"])
+
         def test_health_and_pages(self):
             with TestClient(app, base_url="https://testserver", headers={"Origin":"https://testserver"}) as client:
                 response = client.get("/api/health")
