@@ -188,8 +188,10 @@ async def run_agent(task: TaskIn):
         {"role": "system", "content": system},
         {"role": "user", "content": task.instructions + ("\n\nAntecedentes:\n" + task.context if task.context else "")}
     ], "temperature": 0.2, "max_tokens": 1800}
-    # OpenRouter's free router selects an available free model. A paid model with\n    # insufficient credits gets one automatic retry using that router.
-    free_router = "openrouter/free"\n    selected_model = model
+    # OpenRouter's free router selects an available free model. A paid model with
+    # insufficient credits gets one automatic retry using that router.
+    free_router = "openrouter/free"
+    selected_model = model
     try:
         async with httpx.AsyncClient(timeout=75) as client:
             response = await client.post(
@@ -209,11 +211,16 @@ async def run_agent(task: TaskIn):
                 # Never return provider bodies: they can contain sensitive request data.
                 status = response.status_code
                 if status == 401 or status == 403:
-                    detail = "OpenRouter rechazó la API Key o sus permisos (HTTP " + str(status) + ")."\n                elif status == 402:
-                    detail = "OpenRouter indica saldo insuficiente incluso para esta solicitud (HTTP 402)."\n                elif status == 429:
-                    detail = "Límite de solicitudes de OpenRouter alcanzado (HTTP 429). Intenta más tarde."\n                elif status == 404:
-                    detail = "Modelo de OpenRouter no disponible (HTTP 404)."\n                else:
-                    detail = "OpenRouter devolvió HTTP " + str(status) + "."\n                raise HTTPException(502, detail)
+                    detail = "OpenRouter rechazó la API Key o sus permisos (HTTP " + str(status) + ")."
+                elif status == 402:
+                    detail = "OpenRouter indica saldo insuficiente incluso para esta solicitud (HTTP 402)."
+                elif status == 429:
+                    detail = "Límite de solicitudes de OpenRouter alcanzado (HTTP 429). Intenta más tarde."
+                elif status == 404:
+                    detail = "Modelo de OpenRouter no disponible (HTTP 404)."
+                else:
+                    detail = "OpenRouter devolvió HTTP " + str(status) + "."
+                raise HTTPException(502, detail)
             data = response.json()
             answer = data["choices"][0]["message"]["content"]
             if not isinstance(answer, str) or not answer.strip():
@@ -245,7 +252,8 @@ async def scan_opportunities(scan: OpportunityScanIn):
     terms = [term.strip().lower() for term in scan.terms if 2 <= len(term.strip()) <= 100]
     if not terms:
         raise HTTPException(422, "Indica al menos una palabra clave válida.")
-    url = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"\n    try:
+    url = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"
+    try:
         async with httpx.AsyncClient(timeout=35) as client:
             response = await client.get(url, params={"estado": "activas", "ticket": ticket})
             response.raise_for_status()
@@ -382,7 +390,8 @@ async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, 
         except httpx.HTTPError as exc:
             raise HTTPException(502, "No fue posible contactar OpenRouter.") from exc
         if response.status_code == 402 and model != "openrouter/free" and attempt == 0:
-            model = "openrouter/free"\n            payload["model"] = model
+            model = "openrouter/free"
+            payload["model"] = model
             continue
         if response.is_error:
             raise HTTPException(502, "OpenRouter rechazó la solicitud (HTTP "\n                                + str(response.status_code) + ").")
@@ -397,7 +406,8 @@ async def _ask_provider(client: httpx.AsyncClient, role: str, instruction: str, 
 
 @app.post("/api/office/execute", dependencies=[Depends(authorize)])
 async def execute_office(request: OfficeRequest):
-    """Director plans, specialists draft, auditor checks; save the expediente."""\n    with httpx.AsyncClient(timeout=90) as client:
+    """Director plans, specialists draft, auditor checks; save the expediente."""
+    with httpx.AsyncClient(timeout=90) as client:
         director = await _ask_provider(
             client, "Director",
             "Clasifica el encargo y redacta un plan breve. Elige hasta DOS especialistas "\n            "de esta lista: " + ", ".join(r for r in ROLES if r not in ("Director", "Auditor")) + ". "\n            "Responde PRIMERO con una línea estricta ROLES: nombre1, nombre2 "\n            "y después PLAN: y el plan. No uses otros roles.",
@@ -555,7 +565,8 @@ def review_client_request(request_id: str, decision: ReviewDecision):
         payload = json.loads(row["payload"])
         if payload.get("status") != "Revisión humana pendiente" or not payload.get("office_id"):
             raise HTTPException(409, "No hay expediente pendiente de revisión")
-        payload["status"] = "Aprobado" if decision.decision == "approve" else "Requiere correcciones"\n        payload["review_notes"] = decision.notes
+        payload["status"] = "Aprobado" if decision.decision == "approve" else "Requiere correcciones"
+        payload["review_notes"] = decision.notes
         payload["reviewed_at"] = utcnow()
         db.execute("UPDATE records SET payload=?, updated_at=? WHERE id=?",
                    (json.dumps(payload, ensure_ascii=False), utcnow(), request_id))
