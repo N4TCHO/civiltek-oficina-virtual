@@ -121,7 +121,7 @@ async def run_agent(task: TaskIn):
     api_key = os.getenv("OPENROUTER_API_KEY", "")
     if not api_key:
         raise HTTPException(503, "OPENROUTER_API_KEY is not configured")
-    model = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+    model = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     system = ("Eres un especialista de la consultora Civiltek, Chile. " + ROLES[task.role] +
         " Responde en español chileno profesional. No inventes leyes, valores de mercado, "
         "normas MOP, documentos ni resultados de ensayos. Identifica los datos faltantes, "
@@ -131,17 +131,46 @@ async def run_agent(task: TaskIn):
         {"role": "system", "content": system},
         {"role": "user", "content": task.instructions + ("\n\nAntecedentes:\n" + task.context if task.context else "")}
     ], "temperature": 0.2, "max_tokens": 1800}
+    # OpenRouter's free router selects an available free model. A paid model with
+    # insufficient credits gets one automatic retry using that router.
+    free_router = "openrouter/free"
+    selected_model = model
     try:
         async with httpx.AsyncClient(timeout=75) as client:
-            response = await client.post("https://openrouter.ai/api/v1/chat/completions",
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
                 headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
-                json=payload)
-            response.raise_for_status()
+                json=payload,
+            )
+            if response.status_code == 402 and selected_model != free_router:
+                selected_model = free_router
+                payload["model"] = free_router
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
+                    json=payload,
+                )
+            if response.is_error:
+                # Never return provider bodies: they can contain sensitive request data.
+                status = response.status_code
+                if status == 401 or status == 403:
+                    detail = "OpenRouter rechazó la API Key o sus permisos (HTTP " + str(status) + ")."
+                elif status == 402:
+                    detail = "OpenRouter indica saldo insuficiente incluso para esta solicitud (HTTP 402)."
+                elif status == 429:
+                    detail = "Límite de solicitudes de OpenRouter alcanzado (HTTP 429). Intenta más tarde."
+                elif status == 404:
+                    detail = "Modelo de OpenRouter no disponible (HTTP 404)."
+                else:
+                    detail = "OpenRouter devolvió HTTP " + str(status) + "."
+                raise HTTPException(502, detail)
             data = response.json()
             answer = data["choices"][0]["message"]["content"]
-    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-        raise HTTPException(502, "AI provider failed; check model, quota, and credentials") from exc
-    return {"role": task.role, "model": model, "draft": answer, "requires_human_review": True}
+            if not isinstance(answer, str) or not answer.strip():
+                raise ValueError("Empty model answer")
+    except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError) as exc:
+        raise HTTPException(502, "No fue posible obtener respuesta de OpenRouter. Comprueba disponibilidad del proveedor.") from exc
+    return {"role": task.role, "model": selected_model, "draft": answer, "requires_human_review": True}
 
 class LetterIn(BaseModel):
     number: str = Field(max_length=50)
