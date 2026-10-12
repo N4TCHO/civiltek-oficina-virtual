@@ -1,0 +1,21 @@
+/* Civiltek isometric office: CSS architecture; animation reflects only recorded job states. */
+.scene{min-height:350px!important;padding:20px 8px!important;overflow:hidden!important;align-items:center!important}
+.scene .pulse,.scene .director{display:none!important}
+.iso-wrap{position:relative;width:min(730px,100%);height:330px;display:flex;align-items:center;justify-content:center;perspective:1100px}
+.iso-floor{width:640px;max-width:92%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(3,90px);gap:7px;transform:rotateX(38deg) rotateZ(-17deg) scale(.9);transform-style:preserve-3d;filter:drop-shadow(12px 24px 12px #0009)}
+.iso-room{position:relative;border:2px solid #3c99b9;background:linear-gradient(145deg,#164c64,#0a273b 75%);border-radius:5px;box-shadow:inset 0 0 15px #29c9ef28,4px 5px 0 #063c5a,6px 7px 0 #04283c;cursor:pointer;color:#dffaff;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:7px 2px;transition:filter .2s;transform-style:preserve-3d}
+.iso-room:before{content:"";position:absolute;left:0;top:0;right:0;height:9px;background:#5fdfff77;box-shadow:0 0 8px #2bdfff}
+.iso-room:hover,.iso-room:focus-visible{filter:brightness(1.5);outline:2px solid #4de3ff}
+.iso-room.active{border-color:#63f8c7;box-shadow:inset 0 0 20px #0cddab66,0 0 19px #23ffb088,5px 7px 0 #063c5a}
+.iso-room strong{font-size:10px;line-height:1.1;text-shadow:0 1px 3px #001;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.iso-room small{font-size:8px;color:#9bdae8}
+.iso-desk{position:absolute;top:17px;left:50%;transform:translateX(-50%);height:17px;width:43px;background:linear-gradient(#307b95,#154157);border:2px solid #57c5e2;border-radius:3px;box-shadow:2px 4px 0 #0a2738}
+.iso-screen{position:absolute;left:50%;top:-12px;transform:translateX(-50%);width:21px;height:16px;border:2px solid #75d6f3;background:#0b1d30;box-shadow:inset 0 0 8px #21e4e8}
+.iso-person{position:absolute;top:40px;left:50%;transform:translateX(-50%);font-size:24px;filter:drop-shadow(0 2px 3px #000);animation:typing 2.8s ease-in-out infinite}
+.iso-room.active .iso-person{animation:typing .7s ease-in-out infinite}
+.iso-room.active .iso-screen{background:#19a48d;box-shadow:0 0 16px #32f5c5}
+.iso-label{position:absolute;bottom:4px;left:12px;color:#91c9dc;font-size:11px;background:#071a2dce;border:1px solid #295877;padding:5px 10px;border-radius:7px}
+.iso-label strong{color:#64dfff}
+@keyframes typing{50%{transform:translate(-50%,-3px) rotate(3deg)}}
+@media(max-width:650px){.scene{min-height:245px!important}.iso-wrap{height:240px}.iso-floor{width:520px;min-width:460px;transform:rotateX(38deg) rotateZ(-17deg) scale(.67);gap:5px}.iso-room strong{font-size:10px}.iso-label{font-size:10px}}
+@media(prefers-reduced-motion:reduce){.iso-person{animation:none!important}}
