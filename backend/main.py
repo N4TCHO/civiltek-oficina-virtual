@@ -179,3 +179,7 @@ def letters_page():
 @app.get("/agentes")
 def agents_page():
     return FileResponse(ROOT / "agentes.html")
+
+@app.get("/workspace")
+def workspace_page():
+    return FileResponse(ROOT / "workspace.html")
