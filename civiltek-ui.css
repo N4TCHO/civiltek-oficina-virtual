@@ -1,0 +1,27 @@
+/* Civiltek UI refinement v1: shared, accessible and responsive */
+:root{--ct-accent:#57e0c7;--ct-bg:#08121f;--ct-border:#30465e;--ct-text:#edf5ff;--ct-muted:#a7bed4}
+html{scroll-behavior:smooth}body{background-color:var(--ct-bg);background-image:radial-gradient(ellipse 65% 38% at 90% 0%,rgba(44,139,161,.14),transparent),radial-gradient(ellipse 55% 36% at 0% 90%,rgba(45,83,142,.11),transparent);color:var(--ct-text);-webkit-font-smoothing:antialiased}
+button,.btn,a,input,select,textarea{transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease}
+button:hover:not(:disabled),.btn:hover{filter:brightness(1.07);transform:translateY(-1px)}
+button:disabled{cursor:wait;opacity:.55}
+:focus-visible{outline:3px solid #83e9dc!important;outline-offset:3px}
+input:focus,select:focus,textarea:focus{border-color:#69e1d2!important;box-shadow:0 0 0 3px rgba(86,220,202,.13);outline:none}
+a:hover{color:#a5f9eb}
+.card,.metric,.panel,.tile,section.panel{box-shadow:0 12px 32px rgba(0,0,0,.12)}
+h1,h2,h3{letter-spacing:-.025em}p{line-height:1.65}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+@media(max-width:680px){button,.btn{min-height:42px}input,select,textarea{font-size:16px!important}h1{line-height:1.14}}
+/* Dashboard */
+.layout .side{background:linear-gradient(180deg,#101e31,#0c1727)}
+.layout .side nav a{transition:background-color .18s ease,color .18s ease}
+.layout .side nav a.active{border-left:3px solid var(--ct-accent);font-weight:700}
+.layout .main{min-width:0}
+.layout .metric{position:relative;overflow:hidden}
+.layout .metric:before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#4ed7c2,transparent)}
+.layout .metric b{letter-spacing:-.05em}
+.layout .card{background:linear-gradient(155deg,#162a40,#102035)}
+.layout .actions a{background:#18364a;padding:11px 13px;border-radius:9px;border:1px solid #315a6a}
+.layout .actions a:hover{background:#234b5c}
+.layout .login{box-shadow:0 30px 75px rgba(0,0,0,.28);border:1px solid #34536a}
+@media(max-width:900px){.layout .side{display:block;padding:12px 14px}.layout .side>div{display:inline-block;vertical-align:middle}.layout .side nav{display:flex;gap:5px;overflow-x:auto;padding:7px 0;scrollbar-width:thin}.layout .side nav a{white-space:nowrap;flex-shrink:0}.layout .side nav a.active{border-left:0;border-bottom:2px solid var(--ct-accent)}}
+@media(max-width:520px){.layout .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.layout .metric b{font-size:clamp(24px,7vw,32px)}.layout .card{padding:15px}.layout .main{padding:18px 12px}.layout .top{align-items:flex-start}}
