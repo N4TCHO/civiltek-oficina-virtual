@@ -16,9 +16,9 @@ if True:
             with TestClient(app,base_url="https://testserver",headers={"Origin":"https://testserver"}) as client:
                 page=client.get("/oficina")
                 self.assertEqual(page.status_code,200)
-                self.assertIn('id="floor"',page.text)
+                self.assertIn('id="office3d"',page.text)
                 self.assertIn('id="prompt"',page.text)
-                self.assertEqual(client.get("/oficina-isometrica.css").status_code,200)
+                self.assertEqual(client.get("/oficina-3d.js").status_code,200)
                 client.post("/api/auth/login",json={"password":os.environ["CIVILTEK_ADMIN_TOKEN"]})
                 providers=client.get("/api/office/agents")
                 self.assertEqual(providers.status_code,200)
