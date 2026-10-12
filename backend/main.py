@@ -15,6 +15,7 @@ from pathlib import Path
 
 import httpx
 from docx import Document
+from backend.estados_pago import EstadoPago, calcular, totales, excel_ep
 from fastapi import FastAPI, Depends, Header, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -512,6 +513,21 @@ def letter_docx(letter: LetterIn):
     stream.seek(0)
     return StreamingResponse(stream, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": 'attachment; filename="civiltek-carta.docx"'})
+
+@app.post("/api/estados-pago/calcular", dependencies=[Depends(authorize)])
+def calcular_estado_pago(data: EstadoPago):
+    rows = calcular(data)
+    return {"contrato": data.contrato, "numero": data.numero, "periodo": data.periodo,
+            "items": rows, "totales": totales(rows),
+            "advertencia": "Cálculo base sin reajustes, retenciones, anticipos, IVA ni modificaciones contractuales."}
+
+@app.post("/api/estados-pago/excel", dependencies=[Depends(authorize)])
+def descargar_estado_pago(data: EstadoPago):
+    return excel_ep(data)
+
+@app.get("/estados-pago")
+def estados_pago_page():
+    return FileResponse(ROOT / "estados-pago.html")
 
 @app.get("/civiltek-ui.css")
 def civiltek_stylesheet():
