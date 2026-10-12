@@ -62,8 +62,12 @@ def configure(connect,run_work):
         with connect() as db:
             job=get(ident)
             if job["status"]!="Revisión humana pendiente":raise HTTPException(409,"El trabajo no está pendiente de aprobación")
-            job["status"]="Aprobado" if data.approved else "Correcciones solicitadas"
-            log(job,"Aprobación",("Aprobado: " if data.approved else "Observado: ")+data.note)
+            job["status"]="Aprobado" if data.approved else "En cola"
+            if not data.approved:
+                job["context"]=(job["context"]+"\\nOBSERVACIONES PARA CORRECCIÓN: "+data.note+
+                                "\\nVersión anterior: "+str(job.get("result_id")))[-16000:]
+                job["stage"]="Corrección solicitada"
+            log(job,"Aprobación",("Aprobado: " if data.approved else "Corrección solicitada: ")+data.note)
             save(db,job)
         return {"id":ident,"status":job["status"]}
     async def work_one():
