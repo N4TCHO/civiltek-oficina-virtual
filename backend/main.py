@@ -463,3 +463,7 @@ def workspace_page():
 @app.get("/oficina")
 def office_page():
     return FileResponse(ROOT / "oficina.html")
+
+@app.get("/clientes")
+def clients_page():
+    return FileResponse(ROOT / "clientes.html")
