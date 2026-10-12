@@ -1,5 +1,8 @@
 """Civiltek API: single-admin MVP. Configure a private persistent volume before production."""
 import hmac
+import hashlib
+import base64
+import time
 import io
 import json
 import os
@@ -12,7 +15,7 @@ from pathlib import Path
 
 import httpx
 from docx import Document
-from fastapi import FastAPI, Depends, Header, HTTPException
+from fastapi import FastAPI, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -56,12 +59,59 @@ def setup():
         )""")
         db.execute("""CREATE INDEX IF NOT EXISTS idx_records_kind ON records(kind)""")
 
-def authorize(authorization: str | None = Header(default=None)):
+SESSION_SECONDS = 7 * 24 * 60 * 60
+COOKIE_NAME = "civiltek_session"
+
+def _signature(value: str) -> str:
+    digest = hmac.new(TOKEN.encode(), value.encode(), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+def _valid_session(cookie: str | None) -> bool:
+    if not cookie or "." not in cookie or len(TOKEN) < 32:
+        return False
+    timestamp, signature = cookie.split(".", 1)
+    if not timestamp.isdigit() or not hmac.compare_digest(_signature(timestamp), signature):
+        return False
+    age = time.time() - int(timestamp)
+    return 0 <= age <= SESSION_SECONDS
+
+def authorize(request: Request, authorization: str | None = Header(default=None)):
     if len(TOKEN) < 32:
         raise HTTPException(503, "Configure CIVILTEK_ADMIN_TOKEN with at least 32 characters.")
-    expected = "Bearer " + TOKEN
-    if not authorization or not hmac.compare_digest(authorization, expected):
-        raise HTTPException(401, "Unauthorized")
+    if authorization and hmac.compare_digest(authorization, "Bearer " + TOKEN):
+        return
+    if _valid_session(request.cookies.get(COOKIE_NAME)):
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            origin = request.headers.get("origin", "")
+            if origin != str(request.base_url).rstrip("/"):
+                raise HTTPException(403, "Origen de solicitud no permitido.")
+        return
+    raise HTTPException(401, "Inicia sesión para continuar.")
+
+class LoginIn(BaseModel):
+    password: str = Field(min_length=1, max_length=500)
+
+@app.post("/api/auth/login")
+def login(data: LoginIn, response: Response):
+    if len(TOKEN) < 32:
+        raise HTTPException(503, "Acceso no configurado.")
+    if not hmac.compare_digest(data.password, TOKEN):
+        raise HTTPException(401, "Clave incorrecta.")
+    stamp = str(int(time.time()))
+    response.set_cookie(COOKIE_NAME, stamp + "." + _signature(stamp),
+        max_age=SESSION_SECONDS, httponly=True, secure=True, samesite="strict", path="/")
+    response.headers["Cache-Control"] = "no-store"
+    return {"ok": True, "expires_in_days": 7}
+
+@app.post("/api/auth/logout")
+def logout(response: Response):
+    response.delete_cookie(COOKIE_NAME, path="/", secure=True, httponly=True, samesite="strict")
+    return {"ok": True}
+
+@app.get("/api/auth/status")
+def auth_status(request: Request):
+    return {"authenticated": _valid_session(request.cookies.get(COOKIE_NAME))}
+
 
 class RecordIn(BaseModel):
     kind: str
