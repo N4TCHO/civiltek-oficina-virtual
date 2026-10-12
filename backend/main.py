@@ -513,6 +513,10 @@ def letter_docx(letter: LetterIn):
     return StreamingResponse(stream, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": 'attachment; filename="civiltek-carta.docx"'})
 
+@app.get("/civiltek-ui.css")
+def civiltek_stylesheet():
+    return FileResponse(ROOT / "civiltek-ui.css", media_type="text/css", headers={"Cache-Control": "public, max-age=300"})
+
 @app.get("/")
 def index():
     return FileResponse(ROOT / "index.html")
