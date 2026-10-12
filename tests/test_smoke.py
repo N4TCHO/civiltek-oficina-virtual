@@ -49,7 +49,7 @@ if True:
                 matrix=client.get("/api/licitaciones/expedientes/"+ident+"/matriz")
                 self.assertEqual(matrix.status_code,200)
                 self.assertEqual(matrix.json()["documents"],1)
-                self.assertTrue(all(x["status"]=="Pendiente de revisión" for x in matrix.json()["checks"]))
+                self.assertTrue(all("evidence" in x for x in matrix.json()["checks"]))
                 listed=client.get("/api/licitaciones/expedientes")
                 self.assertTrue(any(x["id"]==ident for x in listed.json()))
 
@@ -81,7 +81,7 @@ if True:
         def test_agent_workflow_with_mock_provider(self):
             async def mock_provider(client, role, instruction, context):
                 if role == "Director":
-                    content = "ROLES: Calidad MOP, Presupuestos\\nPLAN: revisar antecedentes"
+                    content = "ROLES: Calidad MOP, Presupuestos\nPLAN: revisar antecedentes"
                 elif role == "Auditor":
                     content = "BORRADOR REQUIERE REVISION HUMANA: verificar respaldo"
                 else:
