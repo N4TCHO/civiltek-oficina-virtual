@@ -17,7 +17,7 @@ if True:
                 response = client.get("/api/health")
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(response.json()["ok"])
-                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes", "/civiltek-ui.css", "/estados-pago", "/operaciones", "/estudio-licitaciones"):
+                for route in ("/", "/panel", "/agentes", "/oficina", "/clientes", "/civiltek-ui.css", "/estados-pago", "/operaciones", "/estudio-licitaciones", "/apu"):
                     with self.subTest(route=route):
                         self.assertEqual(client.get(route).status_code, 200)
 
@@ -30,6 +30,25 @@ if True:
                 self.assertTrue(login.json()["ok"])
                 self.assertEqual(client.get("/api/auth/status").json()["authenticated"], True)
                 self.assertEqual(client.get("/api/records").status_code, 200)
+
+        def test_apu_pricing_and_excel(self):
+            data={"code":"302-1","description":"Base granular","unit":"m3",
+                "resources":[{"name":"Árido","type":"Materiales","unit":"m3",
+                              "quantity":"1.2","unit_price":"10000"},
+                             {"name":"Operario","type":"Mano de obra","unit":"h",
+                              "quantity":"0.5","unit_price":"8000"}],
+                "indirect_pct":"10","profit_pct":"10"}
+            with TestClient(app,base_url="https://testserver",headers={"Origin":"https://testserver"}) as client:
+                client.post("/api/auth/login",json={"password":os.environ["CIVILTEK_ADMIN_TOKEN"]})
+                result=client.post("/api/apu/calcular",json=data)
+                self.assertEqual(result.status_code,200,result.text)
+                self.assertEqual(result.json()["direct_cost"],16000)
+                self.assertEqual(result.json()["unit_price"],19360)
+                excel=client.post("/api/apu/excel",json=data)
+                self.assertEqual(excel.status_code,200,excel.text)
+                self.assertTrue(excel.content.startswith(b"PK"))
+                data["resources"][0]["quantity"]="-1"
+                self.assertEqual(client.post("/api/apu/calcular",json=data).status_code,422)
 
         def test_tender_dossier_document_intake(self):
             from io import BytesIO
@@ -50,6 +69,9 @@ if True:
                 self.assertEqual(matrix.status_code,200)
                 self.assertEqual(matrix.json()["documents"],1)
                 self.assertTrue(all("evidence" in x for x in matrix.json()["checks"]))
+                exported=client.get("/api/licitaciones/expedientes/"+ident+"/matriz.xlsx")
+                self.assertEqual(exported.status_code,200,exported.text)
+                self.assertTrue(exported.content.startswith(b"PK"))
                 listed=client.get("/api/licitaciones/expedientes")
                 self.assertTrue(any(x["id"]==ident for x in listed.json()))
 
